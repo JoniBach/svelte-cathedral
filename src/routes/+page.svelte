@@ -5,31 +5,25 @@
 
 	let canvas;
 	let hoverSquares = [];
-	let hoverGroup = new THREE.Group(); // Group for hover squares
+	let hoverGroup = new THREE.Group();
 	let isDragging = false;
 	let mouse = new THREE.Vector2();
 	let raycaster = new THREE.Raycaster();
-	let selectedPiece = null; // Currently selected piece for dragging
-	let actionType = null; // 'place' or 'move'
+	let selectedPiece = null;
+	let selectedPieceLabel = null;
+	let actionType = null; // 'place' when a piece is currently being positioned
 
 	const gridMin = -5;
 	const gridMax = 5;
 
-	// Define player properties
 	const players = {
-		1: { name: 'Player 1', color: 0x0077ff }, // Blue
-		2: { name: 'Player 2', color: 0xff0000 } // Red
+		1: { name: 'Player 1', color: 0x0077ff },
+		2: { name: 'Player 2', color: 0xff0000 }
 	};
 
-	let currentPlayer = 1; // Start with Player 1
-
-	// Track if Player 1 has placed the Cathedral
+	let currentPlayer = 1;
 	let player1CathedralPlaced = false;
 
-	// Flag to track if the current player has placed a piece this turn
-	let hasPlacedPiece = false;
-
-	// Define available pieces
 	const pieces = {
 		Cathedral: [
 			[1, 0, true],
@@ -95,7 +89,6 @@
 		Tavern: [[0, 0, true]]
 	};
 
-	// Define buttons for both players with counts
 	let playerButtons = {
 		1: [
 			{ label: 'Cathedral', id: 'btnCathedralP1', count: 1, active: false, piece: null },
@@ -125,83 +118,83 @@
 		]
 	};
 
-	// Array to keep track of all placed pieces for easy access
 	let placedPieces = [];
 
 	function toggleButton(player, id) {
-		// Only allow current player to toggle buttons
 		if (player !== currentPlayer) return;
 
 		const btnIndex = playerButtons[player].findIndex((btn) => btn.id === id);
 		const btn = playerButtons[player][btnIndex];
 
-		// If Player 1 hasn't placed the Cathedral yet, restrict to only 'Cathedral'
 		if (player === 1 && !player1CathedralPlaced && btn.label !== 'Cathedral') {
 			return;
 		}
 
-		// Prevent selection if count is zero or if a piece has already been placed this turn
-		if (btn.count <= 0 || hasPlacedPiece) return;
-
-		// Toggle the active state
 		const isActivating = !btn.active;
-		playerButtons[player] = playerButtons[player].map((btnItem, index) => ({
-			...btnItem,
-			active: index === btnIndex ? isActivating : false
-		}));
 
 		if (isActivating) {
-			// If activating, create the piece
-			actionType = 'place';
-			changePiece(player, btn.label, btnIndex);
+			// Deactivate all other buttons and remove their pieces
+			playerButtons[player] = playerButtons[player].map((b, idx) => {
+				if (b.active && b.piece) {
+					scene.remove(b.piece);
+					const pieceIndex = placedPieces.indexOf(b.piece);
+					if (pieceIndex !== -1) placedPieces.splice(pieceIndex, 1);
+					b.piece = null;
+				}
+				return { ...b, active: false };
+			});
+
+			// If a piece is currently placed this turn, remove it before adding a new one
+			if (selectedPiece) {
+				scene.remove(selectedPiece);
+				const index = placedPieces.indexOf(selectedPiece);
+				if (index !== -1) placedPieces.splice(index, 1);
+				selectedPiece = null;
+				selectedPieceLabel = null;
+				removeHoverSquares();
+			}
+
+			if (btn.count > 0) {
+				playerButtons[player][btnIndex] = { ...btn, active: true };
+				actionType = 'place';
+				changePiece(player, btn.label, btnIndex);
+				isDragging = true;
+			}
 		} else {
-			// If deactivating, remove the piece from the board
+			// Turning off the same button:
 			if (btn.piece) {
 				scene.remove(btn.piece);
 				const pieceIndex = placedPieces.indexOf(btn.piece);
 				if (pieceIndex !== -1) placedPieces.splice(pieceIndex, 1);
 				btn.piece = null;
-				btn.count += 1; // Restore the count
-				// If the Cathedral was removed, update the state
-				if (player === 1 && btn.label === 'Cathedral') {
-					player1CathedralPlaced = false;
-				}
-				removeHoverSquares();
-				selectedPiece = null;
-				actionType = null;
-				isDragging = false;
 			}
+			playerButtons[player][btnIndex] = { ...btn, active: false };
+			removeHoverSquares();
+			selectedPiece = null;
+			selectedPieceLabel = null;
+			actionType = null;
+			isDragging = false;
 		}
 	}
 
 	function changePiece(player, label, btnIndex) {
 		const pattern = pieces[label];
 		if (!pattern) return;
-
-		// Check if the piece count is available
 		const btn = playerButtons[player][btnIndex];
 		if (btn.count <= 0) return;
 
-		// Create a new piece and set it as the selected piece for dragging
 		const newPiece = createPiece(pattern, player, label);
 		scene.add(newPiece);
-		createHoverSquares(pattern, player, actionType, label);
-		selectedPiece = newPiece; // Set the new piece as the selected piece being dragged
-		isDragging = true; // Set isDragging to true for placing
-		placedPieces.push(newPiece); // Add to placed pieces array
-
-		// Associate the piece with the button
-		playerButtons[player][btnIndex].piece = newPiece;
+		createHoverSquares(pattern, player, 'place', label);
+		selectedPiece = newPiece;
+		selectedPieceLabel = label;
+		placedPieces.push(newPiece);
+		playerButtons[player][btnIndex] = { ...btn, piece: newPiece };
 	}
 
 	function createPiece(pattern, player, label) {
 		const group = new THREE.Group();
-		let color;
-		if (label === 'Cathedral') {
-			color = 0xffffff; // White color for Cathedral
-		} else {
-			color = players[player].color; // Player's color for other pieces
-		}
+		let color = label === 'Cathedral' ? 0xffffff : players[player].color;
 		const material = new THREE.MeshBasicMaterial({ color });
 		let anchorCube = null;
 
@@ -216,24 +209,19 @@
 			group.position.set(-anchorCube.position.x, 0, -anchorCube.position.z);
 		}
 
-		// Store player and pattern information in userData
 		group.userData.player = player;
 		group.userData.pattern = pattern;
 		group.userData.label = label;
-
 		return group;
 	}
 
 	function createHoverSquares(pattern, player, action, label) {
-		// Remove existing hover squares
 		removeHoverSquares();
 		hoverSquares = [];
-		let hoverColor;
-		if (player === 1 && !player1CathedralPlaced && label === 'Cathedral') {
-			hoverColor = 0xffffff; // White for Player 1's Cathedral
-		} else {
-			hoverColor = players[player].color; // Player's color for hover squares
-		}
+		let hoverColor =
+			player === 1 && !player1CathedralPlaced && label === 'Cathedral'
+				? 0xffffff
+				: players[player].color;
 		const hoverMaterial = new THREE.MeshBasicMaterial({
 			color: hoverColor,
 			transparent: true,
@@ -244,7 +232,7 @@
 			const square = new THREE.Mesh(planeGeometry, hoverMaterial);
 			square.rotation.x = -Math.PI / 2;
 			square.position.set(x, 0.01, z);
-			hoverGroup.add(square); // Add to hoverGroup
+			hoverGroup.add(square);
 			hoverSquares.push(square);
 		}
 	}
@@ -260,29 +248,24 @@
 	let controls;
 
 	onMount(() => {
-		// Initialize Three.js Scene
 		scene = new THREE.Scene();
 		camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 		renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 		renderer.setSize(window.innerWidth, window.innerHeight);
+
 		controls = new OrbitControls(camera, renderer.domElement);
 		controls.enableDamping = true;
 		controls.dampingFactor = 0.25;
 		controls.enableZoom = true;
 		controls.maxPolarAngle = Math.PI / 2;
 
-		// Add Grid Helper
 		const gridHelper = new THREE.GridHelper(10, 10);
 		scene.add(gridHelper);
-
-		// Add hoverGroup to the scene
 		scene.add(hoverGroup);
 
-		// Set Camera Position
 		camera.position.set(5, 5, 5);
 		camera.lookAt(0, 0, 0);
 
-		// Animation Loop
 		function animate() {
 			requestAnimationFrame(animate);
 			if (!isDragging) {
@@ -290,50 +273,17 @@
 			}
 			renderer.render(scene, camera);
 		}
-
 		animate();
 
-		// Handle Window Resize
 		window.addEventListener('resize', () => {
 			camera.aspect = window.innerWidth / window.innerHeight;
 			camera.updateProjectionMatrix();
 			renderer.setSize(window.innerWidth, window.innerHeight);
 		});
 
-		// Mouse Down Event for Selecting Existing Pieces (for moving)
-		window.addEventListener('mousedown', (event) => {
-			// Update mouse coordinates
-			mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-			mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-			raycaster.setFromCamera(mouse, camera);
-
-			// Raycast only against placed pieces
-			const intersects = raycaster.intersectObjects(placedPieces, true);
-
-			if (intersects.length > 0) {
-				const intersected = intersects[0].object.parent; // Get the parent group
-
-				// Check if the intersected piece belongs to the current player
-				if (intersected.userData.player === currentPlayer) {
-					isDragging = true;
-					controls.enabled = false;
-					selectedPiece = intersected;
-					actionType = 'move';
-					createHoverSquares(
-						selectedPiece.userData.pattern,
-						currentPlayer,
-						actionType,
-						selectedPiece.userData.label
-					);
-					selectedPiece.position.y = 1.5; // Lift the piece for dragging
-					hoverSquares.forEach((sq) => (sq.visible = true));
-				}
-			}
-		});
-
-		// Mouse Move Event for Dragging
 		window.addEventListener('mousemove', (event) => {
-			if (!isDragging || !selectedPiece) return;
+			if (!isDragging || !selectedPiece || actionType !== 'place') return;
+
 			mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
 			mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 			raycaster.setFromCamera(mouse, camera);
@@ -355,109 +305,105 @@
 			}
 		});
 
-		// Mouse Up Event for Dragging
 		window.addEventListener('mouseup', () => {
-			if (isDragging && selectedPiece) {
-				// Snap the piece to the grid
+			if (isDragging && selectedPiece && actionType === 'place') {
+				// Drop the piece in place
 				selectedPiece.position.y = 0.5;
 				hoverSquares.forEach((sq) => (sq.visible = false));
 				controls.enabled = true;
 
-				if (actionType === 'place') {
-					// If placing a new piece, decrement the count
-					const pieceLabel = selectedPiece.userData.label;
-					const btn = playerButtons[currentPlayer].find((b) => b.label === pieceLabel);
-					if (btn) {
-						btn.count -= 1;
-						if (btn.count < 0) btn.count = 0; // Ensure count doesn't go negative
-					}
-
-					// Update the button state to deactivate it and remove the piece association
-					playerButtons[currentPlayer] = playerButtons[currentPlayer].map((b) => {
-						if (b.label === pieceLabel) {
-							return { ...b, active: false, piece: null };
-						}
-						return b;
-					});
-
-					// If Player 1 placed the Cathedral, update the state
-					if (currentPlayer === 1 && pieceLabel === 'Cathedral' && !player1CathedralPlaced) {
-						player1CathedralPlaced = true;
-					}
-
-					// Set the flag indicating a piece has been placed this turn
-					hasPlacedPiece = true;
-				} else if (actionType === 'move') {
-					// If moving an existing piece, do not change counts
-					// Additional logic can be added here if needed
-				}
-
-				// Reset selection
-				selectedPiece = null;
-				actionType = null;
+				// Don't decrement count or finalize yet. Player can still change or move piece.
 				isDragging = false;
+				actionType = null;
 			}
 		});
 	});
 
-	// End Turn Function
 	function endTurn() {
-		// Deselect any active piece from the menu
-		playerButtons[currentPlayer] = playerButtons[currentPlayer].map((btn) => ({
-			...btn,
-			active: false
-		}));
+		// Finalize the chosen piece
+		if (selectedPiece && selectedPieceLabel) {
+			// Decrement the count of the chosen piece
+			playerButtons[currentPlayer] = playerButtons[currentPlayer].map((b) => {
+				if (b.label === selectedPieceLabel) {
+					let newCount = b.count - 1;
+					if (newCount < 0) newCount = 0;
+					return { ...b, count: newCount, active: false, piece: null };
+				}
+				return { ...b, active: false, piece: null };
+			});
+
+			if (currentPlayer === 1 && selectedPieceLabel === 'Cathedral' && !player1CathedralPlaced) {
+				player1CathedralPlaced = true;
+			}
+		}
+
 		selectedPiece = null;
+		selectedPieceLabel = null;
 		actionType = null;
-		// Reset the placed piece flag for the new turn
-		hasPlacedPiece = false;
-		// Switch to the other player
+		isDragging = false;
+
+		// Switch player
 		currentPlayer = currentPlayer === 1 ? 2 : 1;
 	}
 </script>
 
 <div class="layout">
 	<canvas bind:this={canvas}></canvas>
-	<!-- Player 1 Menu -->
+
 	<div class="button-overlay player1-overlay">
 		<h3>{players[1].name}</h3>
-		{#each playerButtons[1] as { label, id, count, active, piece }}
+		<!-- Cathedral button -->
+		<button
+			id="btnCathedralP1"
+			class:active={playerButtons[1][0].active}
+			on:click={() => toggleButton(1, 'btnCathedralP1')}
+			disabled={isDragging ||
+				currentPlayer !== 1 ||
+				playerButtons[1][0].count <= 0 ||
+				(!player1CathedralPlaced && playerButtons[1][0].label !== 'Cathedral')}
+			title={playerButtons[1][0].count > 0
+				? `${playerButtons[1][0].count} remaining`
+				: 'No more available'}
+		>
+			{playerButtons[1][0].label}{playerButtons[1][0].count > 0
+				? ` (${playerButtons[1][0].count})`
+				: ''}
+		</button>
+
+		{#each playerButtons[1].slice(1) as { label, id, count, active }}
 			<button
 				{id}
 				class:active
 				on:click={() => toggleButton(1, id)}
 				disabled={isDragging ||
 					currentPlayer !== 1 ||
-					(currentPlayer === 1 && !player1CathedralPlaced && label !== 'Cathedral') ||
 					count <= 0 ||
-					hasPlacedPiece}
+					(!player1CathedralPlaced && label !== 'Cathedral')}
 				title={count > 0 ? `${count} remaining` : 'No more available'}
 			>
-				{label}
-				{count > 0 ? ` (${count})` : ''}
+				{label}{count > 0 ? ` (${count})` : ''}
 			</button>
 		{/each}
 	</div>
-	<!-- Player 2 Menu -->
+
 	<div class="button-overlay player2-overlay">
 		<h3>{players[2].name}</h3>
-		{#each playerButtons[2] as { label, id, count, active, piece }}
+		{#each playerButtons[2] as { label, id, count, active }}
 			<button
 				{id}
 				class:active
 				on:click={() => toggleButton(2, id)}
-				disabled={isDragging || currentPlayer !== 2 || count <= 0 || hasPlacedPiece}
+				disabled={isDragging || currentPlayer !== 2 || count <= 0}
 				title={count > 0 ? `${count} remaining` : 'No more available'}
 			>
-				{label}
-				{count > 0 ? ` (${count})` : ''}
+				{label}{count > 0 ? ` (${count})` : ''}
 			</button>
 		{/each}
 	</div>
-	<!-- Turn Overlay -->
+
 	<div class="turn-overlay">
 		<h2>Current Turn: {players[currentPlayer].name}</h2>
-		<button on:click={endTurn} disabled={isDragging || !hasPlacedPiece}>End Turn</button>
+		<button on:click={endTurn}>End Turn</button>
 	</div>
 </div>
 
