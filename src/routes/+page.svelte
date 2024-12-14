@@ -470,8 +470,9 @@
 			});
 
 			// Mark Cathedral as placed
-			if (label === 'Cathedral' && !cathedralPlaced) {
-				cathedralPlaced = true; // Neutral placement, no player ownership
+			if (label === 'Cathedral' && currentPlayer === 1 && !player1CathedralPlaced) {
+				player1CathedralPlaced = true;
+				cathedralPlaced = true;
 			}
 		}
 
@@ -731,7 +732,8 @@
 				disabled={currentAction.dragging ||
 					currentPlayer !== 1 ||
 					count <= 0 ||
-					!canPlayerPlacePiece(1, label)}
+					!canPlayerPlacePiece(1, label) ||
+					(!player1CathedralPlaced && label !== 'Cathedral')}
 				title={count > 0 ? `${count} remaining` : 'No more available'}
 			>
 				{label}{count > 0 ? ` (${count})` : ''}
