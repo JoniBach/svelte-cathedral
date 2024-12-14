@@ -2,6 +2,7 @@
 	import * as THREE from 'three';
 	import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 	import { onMount, onDestroy } from 'svelte';
+	import { writable } from 'svelte/store';
 
 	let canvas;
 
@@ -88,6 +89,7 @@
 		const newType = cellTypeConfig[currentType]?.toggleTo || 'default';
 		mesh.userData.type = newType;
 		updateCellAppearance(mesh);
+		runValidations();
 	}
 
 	function handleHover(mesh) {
@@ -110,15 +112,45 @@
 		}
 	}
 
+	// Validation System
+	const validationErrors = writable([]);
+
+	// Define Validation Rules
+	const validationRules = [
+		{
+			// Rule: No inactive squares
+			validate: () => {
+				return !cells.some((cell) => cell.type === 'inactive');
+			},
+			message: 'There must be no inactive squares.'
+		},
+		{
+			// Rule: At least 5 active squares
+			validate: () => {
+				const activeCount = cells.filter((cell) => cell.type === 'active').length;
+				return activeCount >= 5;
+			},
+			message: 'There must be at least 5 active squares.'
+		}
+		// Add more rules as needed
+	];
+
+	function runValidations() {
+		const errors = validationRules.filter((rule) => !rule.validate()).map((rule) => rule.message);
+		validationErrors.set(errors);
+	}
+
 	onMount(() => {
 		generateBoardConfig(boardSize);
 		initThreeJS();
 		animate();
+		runValidations();
 
 		// Clean up event listeners on destroy
 		return () => {
 			window.removeEventListener('click', onMouseClick);
 			window.removeEventListener('mousemove', onMouseMove);
+			window.removeEventListener('dblclick', onDoubleClick); // If implemented
 		};
 	});
 
@@ -179,7 +211,7 @@
 			board.remove(board.children[0]);
 		}
 
-		cells.forEach(({ cell, type }) => {
+		cells.forEach(({ cell, type }, index) => {
 			const [x, y] = cell;
 			const config = cellTypeConfig[type] || cellTypeConfig.default;
 
@@ -205,7 +237,7 @@
 				config.initialRotation.y,
 				config.initialRotation.z
 			);
-			cellMesh.userData = { type, cellIndex: `${x},${y}` };
+			cellMesh.userData = { type, cellIndex: `${x},${y}`, index };
 
 			board.add(cellMesh);
 
@@ -297,6 +329,12 @@
 				child.material.color.set(config.border.color);
 			}
 		});
+
+		// Update the corresponding cell in the cells array
+		const cellIndex = mesh.userData.index;
+		if (cells[cellIndex]) {
+			cells[cellIndex].type = mesh.userData.type;
+		}
 	}
 
 	function animate() {
@@ -305,6 +343,23 @@
 		renderer.render(scene, camera);
 	}
 </script>
+
+<!-- UI for Displaying Validation Errors -->
+<div
+	style="position: absolute; top: 10px; left: 10px; z-index: 1; background: rgba(255, 255, 255, 0.8); padding: 10px; border-radius: 5px;"
+>
+	{#if $validationErrors.length > 0}
+		<div style="color: red;">
+			<ul>
+				{#each $validationErrors as error}
+					<li>{error}</li>
+				{/each}
+			</ul>
+		</div>
+	{:else}
+		<div style="color: green;">All validation rules are satisfied.</div>
+	{/if}
+</div>
 
 <canvas bind:this={canvas} style="width: 100%; height: 100%; display: block;"></canvas>
 
