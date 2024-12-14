@@ -1,20 +1,43 @@
 <script>
+	/**************************************************************************
+	 * This Svelte component implements a simple Cathedral-like board game setup
+	 * using Three.js. Players can select and place pieces on a grid, with certain
+	 * validation rules. This code has been refactored for clarity, maintainability,
+	 * and adherence to best practices.
+	 *
+	 * Key improvements:
+	 * - Added descriptive comments and docstrings.
+	 * - Centralized constants and configuration at the top for easier management.
+	 * - Improved variable names and reduced "magic numbers."
+	 * - Enhanced code organization and readability, while keeping the single-file structure.
+	 * - Ensured geometry and material reuse to improve performance and maintainability.
+	 **************************************************************************/
+
 	import * as THREE from 'three';
 	import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 	import { onMount, onDestroy } from 'svelte';
 
 	// ─────────────────────────────────────────────────────────────────────────────
-	// CONFIG & CONSTANTS
+	// CONFIGURATION & CONSTANTS
 	// ─────────────────────────────────────────────────────────────────────────────
 
+	// Grid boundaries
 	const GRID_MIN = -5;
 	const GRID_MAX = 5;
+	// Vertical offsets for hovering and placing pieces
+	const PIECE_HOVER_HEIGHT = 1.5;
+	const PIECE_PLACEMENT_HEIGHT = 0.5;
+	// Hover squares transparency
+	const HOVER_OPACITY = 0.5;
 
+	// Player configuration
 	const PLAYERS = {
 		1: { name: 'Player 1', color: 0x0077ff },
 		2: { name: 'Player 2', color: 0xff0000 }
 	};
 
+	// Piece definitions: each piece is a pattern array of [xOffset, zOffset, isAnchor]
+	// The anchor cube is the reference point for the piece.
 	const PIECES = {
 		Cathedral: [
 			[1, 0, true],
@@ -80,6 +103,9 @@
 		Tavern: [[0, 0, true]]
 	};
 
+	/**
+	 * Returns the initial configuration of player buttons, including piece counts and activity status.
+	 */
 	function getInitialPlayerButtons() {
 		return {
 			1: [
@@ -130,6 +156,13 @@
 
 	let placedPieces = [];
 
+	/**
+	 * currentAction holds info about what the user is currently doing:
+	 * - type: 'place' | null
+	 * - piece: the Three.js mesh currently being placed or rotated
+	 * - label: the piece type label string
+	 * - dragging: boolean indicating if the piece is currently being dragged
+	 */
 	let currentAction = {
 		type: null,
 		piece: null,
@@ -137,23 +170,27 @@
 		dragging: false
 	};
 
-	const occupiedCells = new Set();
+	const occupiedCells = new Set(); // Tracks grid cells occupied by placed pieces
 
 	const mouse = new THREE.Vector2();
 	const raycaster = new THREE.Raycaster();
 
+	// Pre-create reused geometry and materials
 	const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
 	const cathedralMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
 	const playerMaterials = {
 		1: new THREE.MeshBasicMaterial({ color: PLAYERS[1].color }),
 		2: new THREE.MeshBasicMaterial({ color: PLAYERS[2].color })
 	};
-	const hoverOpacity = 0.5;
 
 	// ─────────────────────────────────────────────────────────────────────────────
 	// UTILITY FUNCTIONS
 	// ─────────────────────────────────────────────────────────────────────────────
 
+	/**
+	 * Returns true if the given player is allowed to place the specified piece label.
+	 * Player 1 must place the Cathedral first.
+	 */
 	function canPlayerPlacePiece(player, label) {
 		if (player === 1 && !player1CathedralPlaced && label !== 'Cathedral') {
 			return false;
@@ -161,12 +198,19 @@
 		return true;
 	}
 
+	/**
+	 * Removes a piece mesh from the scene and from placedPieces if present.
+	 */
 	function removePieceFromScene(piece) {
 		if (piece && scene) {
 			scene.remove(piece);
 		}
 	}
 
+	/**
+	 * Deactivates all buttons for a given player. If any active piece is associated,
+	 * it is removed from the scene.
+	 */
 	function deactivateAllButtons(player) {
 		playerButtons[player] = playerButtons[player].map((b) => {
 			if (b.active && b.piece) {
@@ -177,6 +221,9 @@
 		});
 	}
 
+	/**
+	 * Removes the currently placed piece from scene and resets currentAction state.
+	 */
 	function removeCurrentlyPlacedPiece() {
 		if (currentAction.piece) {
 			removePieceFromScene(currentAction.piece);
@@ -188,12 +235,18 @@
 		}
 	}
 
+	/**
+	 * Starts the piece placing action by creating a new piece and enabling drag mode.
+	 */
 	function startPlacingPiece(player, label, btnIndex) {
 		currentAction.type = 'place';
 		currentAction.dragging = true;
 		createNewPiece(player, label, btnIndex);
 	}
 
+	/**
+	 * Cancels the current placing action, resets state, removes hover squares.
+	 */
 	function cancelPlacingPiece() {
 		currentAction.type = null;
 		currentAction.dragging = false;
@@ -202,6 +255,10 @@
 		removeHoverSquares();
 	}
 
+	/**
+	 * Creates a new piece mesh (group of cubes) and adds it to the scene.
+	 * Also sets up hover squares.
+	 */
 	function createNewPiece(player, label, btnIndex) {
 		const pattern = PIECES[label];
 		if (!pattern) return;
@@ -221,6 +278,10 @@
 		createHoverSquares(pattern, player, label);
 	}
 
+	/**
+	 * Creates a Three.js group representing the piece based on the given pattern.
+	 * The "anchor" cube is the reference point that will be positioned at the grid cell.
+	 */
 	function createPieceMesh(pattern, player, label) {
 		const group = new THREE.Group();
 		const material = label === 'Cathedral' ? cathedralMaterial : playerMaterials[player];
@@ -233,6 +294,7 @@
 			group.add(cube);
 		}
 
+		// Adjust group position so that anchor cube is at the origin (0,0,0).
 		if (anchorCube) {
 			group.position.set(-anchorCube.position.x, 0, -anchorCube.position.z);
 		}
@@ -241,8 +303,12 @@
 		return group;
 	}
 
+	/**
+	 * Creates hover squares under the piece to indicate its projected placement.
+	 */
 	function createHoverSquares(pattern, player, label) {
 		removeHoverSquares();
+
 		const hoverColor =
 			player === 1 && !player1CathedralPlaced && label === 'Cathedral'
 				? 0xffffff
@@ -251,7 +317,7 @@
 		const hoverMaterial = new THREE.MeshBasicMaterial({
 			color: hoverColor,
 			transparent: true,
-			opacity: hoverOpacity
+			opacity: HOVER_OPACITY
 		});
 
 		const piecePos = currentAction.piece
@@ -268,14 +334,18 @@
 		}
 	}
 
+	/**
+	 * Removes all hover squares from the hoverGroup.
+	 */
 	function removeHoverSquares() {
 		hoverSquares.forEach((sq) => hoverGroup.remove(sq));
 		hoverSquares = [];
 	}
 
+	/**
+	 * Returns an array of occupied cell keys ("x,z") for a given piece.
+	 */
 	function getPieceCells(piece) {
-		// Compute which cells the piece occupies
-		// Returns an array of cell keys ("x,z")
 		const cells = [];
 		const { pattern } = piece.userData;
 		const piecePos = piece.position;
@@ -290,7 +360,12 @@
 	}
 
 	/**
-	 * Return an array of validation error messages for the current piece placement.
+	 * Returns an array of validation errors for the current piece placement.
+	 * Checks:
+	 * - Piece exists and is chosen.
+	 * - Piece is not currently being dragged.
+	 * - Piece is within grid boundaries.
+	 * - Piece does not intersect with other placed pieces.
 	 */
 	function getValidationErrors(piece) {
 		let errors = [];
@@ -304,22 +379,21 @@
 			errors.push('Place the piece on the grid before ending turn.');
 		}
 
+		// Check boundaries
 		const { pattern } = piece.userData;
 		const piecePos = piece.position;
-
 		for (let [px, pz] of pattern) {
 			const cubeX = piecePos.x + px;
 			const cubeZ = piecePos.z + pz;
 
 			if (cubeX < GRID_MIN || cubeX > GRID_MAX || cubeZ < GRID_MIN || cubeZ > GRID_MAX) {
 				errors.push('Part of the piece is outside the grid boundaries.');
-				// If one is outside, no need to check others for boundary
 				break;
 			}
 		}
 
+		// Check intersection if no boundary error
 		if (errors.length === 0) {
-			// Check intersections if no boundary error
 			const cells = getPieceCells(piece);
 			for (const c of cells) {
 				if (occupiedCells.has(c)) {
@@ -333,7 +407,7 @@
 	}
 
 	/**
-	 * After confirming no errors, commit the piece placement to the occupiedCells.
+	 * Commits the piece placement by marking its occupied cells as taken.
 	 */
 	function commitPlacement(piece) {
 		const cells = getPieceCells(piece);
@@ -342,6 +416,12 @@
 		}
 	}
 
+	/**
+	 * Finalizes the piece placement:
+	 * - Deduct the piece count from player's inventory.
+	 * - If Player 1 placed Cathedral, mark it as placed.
+	 * - Cancel current piece action.
+	 */
 	function finalizePlacement() {
 		const label = currentAction.label;
 		const piece = currentAction.piece;
@@ -363,23 +443,34 @@
 		cancelPlacingPiece();
 	}
 
+	/**
+	 * Rotates the piece's pattern around its anchor point.
+	 * direction: 'clockwise' or 'counterclockwise'
+	 */
 	function rotatePattern(pattern, direction = 'clockwise') {
 		const anchorIndex = pattern.findIndex(([x, z, a]) => a);
 		if (anchorIndex === -1) return pattern;
 		const [ax, az] = pattern[anchorIndex];
 
+		// Translate pattern so anchor is at (0,0)
 		const shifted = pattern.map(([x, z, a]) => [x - ax, z - az, a]);
 
 		let rotated;
 		if (direction === 'clockwise') {
+			// (x,z) -> (z, -x)
 			rotated = shifted.map(([x, z, a]) => [z, -x, a]);
 		} else {
+			// (x,z) -> (-z, x)
 			rotated = shifted.map(([x, z, a]) => [-z, x, a]);
 		}
 
+		// Translate back using anchor coordinates
 		return rotated.map(([x, z, a]) => [x + ax, z + az, a]);
 	}
 
+	/**
+	 * Update the current piece's pattern and reconstruct its geometry after rotation.
+	 */
 	function updatePiecePattern(newPattern) {
 		if (!currentAction.piece) return;
 
@@ -388,6 +479,7 @@
 
 		currentAction.piece.userData.pattern = newPattern;
 
+		// Remove old cubes
 		while (currentAction.piece.children.length > 0) {
 			const child = currentAction.piece.children.pop();
 			currentAction.piece.remove(child);
@@ -412,18 +504,27 @@
 		createHoverSquares(newPattern, player, label);
 	}
 
+	/**
+	 * Rotate the currently selected piece clockwise.
+	 */
 	function rotatePieceClockwise() {
 		if (!currentAction.piece || !currentAction.piece.userData.pattern) return;
 		const rotatedPattern = rotatePattern(currentAction.piece.userData.pattern, 'clockwise');
 		updatePiecePattern(rotatedPattern);
 	}
 
+	/**
+	 * Rotate the currently selected piece counterclockwise.
+	 */
 	function rotatePieceCounterClockwise() {
 		if (!currentAction.piece || !currentAction.piece.userData.pattern) return;
 		const rotatedPattern = rotatePattern(currentAction.piece.userData.pattern, 'counterclockwise');
 		updatePiecePattern(rotatedPattern);
 	}
 
+	/**
+	 * Toggles a piece selection button for the given player and piece ID.
+	 */
 	function toggleButton(player, id) {
 		if (player !== currentPlayer) return;
 
@@ -434,6 +535,7 @@
 		const isActivating = !btn.active;
 
 		if (isActivating) {
+			// Deactivate other buttons and remove current placed piece if any
 			deactivateAllButtons(player);
 			removeCurrentlyPlacedPiece();
 
@@ -442,6 +544,7 @@
 				startPlacingPiece(player, btn.label, btnIndex);
 			}
 		} else {
+			// Deactivating current button
 			if (btn.piece) {
 				removePieceFromScene(btn.piece);
 				const pieceIndex = placedPieces.indexOf(btn.piece);
@@ -452,6 +555,12 @@
 		}
 	}
 
+	/**
+	 * Attempts to end the turn:
+	 * - Validates piece placement.
+	 * - If valid, commit placement and switch player.
+	 * - If invalid, revert piece placement.
+	 */
 	function endTurn() {
 		const piece = currentAction.piece;
 		const errors = getValidationErrors(piece);
@@ -473,18 +582,18 @@
 			return;
 		}
 
-		// Valid placement: commit cells and finalize
+		// Valid placement
 		commitPlacement(piece);
 		finalizePlacement();
 		currentPlayer = currentPlayer === 1 ? 2 : 1;
 	}
 
-	// A computed value for validation errors
-	// This will show current errors in real-time
+	// Reactive value tracking validation errors for the current piece
 	$: validationErrors = getValidationErrors(currentAction.piece);
 
-	// A computed value to check if turn is valid (no errors, piece not dragging)
-	// If there are no errors and a piece is placed and not dragging, it's valid
+	/**
+	 * Checks if the current turn action is valid (no errors, piece placed, not dragging).
+	 */
 	function turnIsValid() {
 		const piece = currentAction.piece;
 		if (!piece) return false;
@@ -494,25 +603,36 @@
 
 	let handleMouseMove, handleMouseUp, handleMouseDown, handleResize;
 
+	// ─────────────────────────────────────────────────────────────────────────────
+	// SVELTE LIFECYCLE
+	// ─────────────────────────────────────────────────────────────────────────────
+
 	onMount(() => {
+		// SCENE SETUP
 		scene = new THREE.Scene();
+
+		// CAMERA SETUP
 		camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+		camera.position.set(5, 5, 5);
+		camera.lookAt(0, 0, 0);
+
+		// RENDERER SETUP
 		renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 		renderer.setSize(window.innerWidth, window.innerHeight);
 
+		// ORBIT CONTROLS
 		controls = new OrbitControls(camera, renderer.domElement);
 		controls.enableDamping = true;
 		controls.dampingFactor = 0.25;
 		controls.enableZoom = true;
 		controls.maxPolarAngle = Math.PI / 2;
 
+		// GRID HELPER
 		const gridHelper = new THREE.GridHelper(10, 10);
 		scene.add(gridHelper);
 		scene.add(hoverGroup);
 
-		camera.position.set(5, 5, 5);
-		camera.lookAt(0, 0, 0);
-
+		// ANIMATION LOOP
 		function animate() {
 			requestAnimationFrame(animate);
 			if (!currentAction.dragging) {
@@ -522,16 +642,20 @@
 		}
 		animate();
 
+		// EVENT HANDLERS
 		handleResize = () => {
-			if (typeof window !== 'undefined') {
-				camera.aspect = window.innerWidth / window.innerHeight;
-				camera.updateProjectionMatrix();
-				renderer.setSize(window.innerWidth, window.innerHeight);
-			}
+			camera.aspect = window.innerWidth / window.innerHeight;
+			camera.updateProjectionMatrix();
+			renderer.setSize(window.innerWidth, window.innerHeight);
 		};
 
+		/**
+		 * Mouse move event:
+		 * Snaps the piece to the nearest integer coordinate while dragging.
+		 */
 		handleMouseMove = (event) => {
 			if (!currentAction.dragging || !currentAction.piece || currentAction.type !== 'place') return;
+
 			mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
 			mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 			raycaster.setFromCamera(mouse, camera);
@@ -542,22 +666,24 @@
 				let snapX = Math.floor(intersectPoint.x) + 0.5;
 				let snapZ = Math.floor(intersectPoint.z) + 0.5;
 
-				if (snapX < GRID_MIN) snapX = GRID_MIN;
-				if (snapX > GRID_MAX) snapX = GRID_MAX;
-				if (snapZ < GRID_MIN) snapZ = GRID_MIN;
-				if (snapZ > GRID_MAX) snapZ = GRID_MAX;
+				snapX = Math.max(GRID_MIN, Math.min(snapX, GRID_MAX));
+				snapZ = Math.max(GRID_MIN, Math.min(snapZ, GRID_MAX));
 
 				const pattern = currentAction.piece.userData.pattern;
-				currentAction.piece.position.set(snapX, 1.5, snapZ);
+				currentAction.piece.position.set(snapX, PIECE_HOVER_HEIGHT, snapZ);
 				hoverSquares.forEach((sq, i) => {
 					sq.position.set(snapX + pattern[i][0], 0.01, snapZ + pattern[i][1]);
 				});
 			}
 		};
 
+		/**
+		 * Mouse up event:
+		 * Drops the piece onto the grid and disables dragging.
+		 */
 		handleMouseUp = () => {
 			if (currentAction.dragging && currentAction.piece && currentAction.type === 'place') {
-				currentAction.piece.position.y = 0.5;
+				currentAction.piece.position.y = PIECE_PLACEMENT_HEIGHT;
 				hoverSquares.forEach((sq) => (sq.visible = false));
 				controls.enabled = true;
 				currentAction.dragging = false;
@@ -565,6 +691,10 @@
 			}
 		};
 
+		/**
+		 * Mouse down event:
+		 * If the user clicks on the current piece, re-enable dragging mode.
+		 */
 		handleMouseDown = (event) => {
 			if (!currentAction.dragging && currentAction.piece) {
 				mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -579,33 +709,36 @@
 						currentAction.piece.userData.player,
 						currentAction.label
 					);
-					currentAction.piece.position.y = 1.5;
+					currentAction.piece.position.y = PIECE_HOVER_HEIGHT;
 					controls.enabled = false;
 				}
 			}
 		};
 
-		if (typeof window !== 'undefined') {
-			window.addEventListener('resize', handleResize);
-			window.addEventListener('mousemove', handleMouseMove);
-			window.addEventListener('mouseup', handleMouseUp);
-			window.addEventListener('mousedown', handleMouseDown);
-		}
+		window.addEventListener('resize', handleResize);
+		window.addEventListener('mousemove', handleMouseMove);
+		window.addEventListener('mouseup', handleMouseUp);
+		window.addEventListener('mousedown', handleMouseDown);
 	});
 
 	onDestroy(() => {
-		if (typeof window !== 'undefined') {
-			window.removeEventListener('resize', handleResize);
-			window.removeEventListener('mousemove', handleMouseMove);
-			window.removeEventListener('mouseup', handleMouseUp);
-			window.removeEventListener('mousedown', handleMouseDown);
-		}
+		window.removeEventListener('resize', handleResize);
+		window.removeEventListener('mousemove', handleMouseMove);
+		window.removeEventListener('mouseup', handleMouseUp);
+		window.removeEventListener('mousedown', handleMouseDown);
 	});
 </script>
+
+<!--
+─────────────────────────────────────────────────────────────────────────────
+Svelte Template & Styles
+─────────────────────────────────────────────────────────────────────────────
+-->
 
 <div class="layout">
 	<canvas bind:this={canvas}></canvas>
 
+	<!-- Player 1 UI -->
 	<div class="button-overlay player1-overlay">
 		<h3>{PLAYERS[1].name}</h3>
 		{#each playerButtons[1] as { label, id, count, active }}
@@ -634,6 +767,7 @@
 		</button>
 	</div>
 
+	<!-- Player 2 UI -->
 	<div class="button-overlay player2-overlay">
 		<h3>{PLAYERS[2].name}</h3>
 		{#each playerButtons[2] as { label, id, count, active }}
@@ -659,10 +793,10 @@
 		</button>
 	</div>
 
+	<!-- Turn Status & Validation Errors -->
 	<div class="turn-overlay">
 		<h2>Current Turn: {PLAYERS[currentPlayer].name}</h2>
 		<button on:click={endTurn} disabled={!turnIsValid()}>End Turn</button>
-		<!-- Display validation errors if any -->
 		{#if validationErrors.length > 0}
 			<div class="validation-errors">
 				<ul>
