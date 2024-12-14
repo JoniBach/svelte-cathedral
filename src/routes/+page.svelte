@@ -3,10 +3,6 @@
 	import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 	import { onMount, onDestroy } from 'svelte';
 
-	/** -------------------------------
-	 * Constants & Configuration
-	 * ------------------------------- */
-
 	const GRID_MIN = -5;
 	const GRID_MAX = 5;
 
@@ -15,7 +11,6 @@
 		2: { name: 'Player 2', color: 0xff0000 }
 	};
 
-	// Define piece patterns: Each piece is defined by an array of [x, z, isAnchor]
 	const PIECES = {
 		Cathedral: [
 			[1, 0, true],
@@ -81,10 +76,6 @@
 		Tavern: [[0, 0, true]]
 	};
 
-	/**
-	 * Initial button configuration for each player.
-	 * 'active' and 'piece' are dynamic properties.
-	 */
 	function getInitialPlayerButtons() {
 		return {
 			1: [
@@ -116,10 +107,6 @@
 		};
 	}
 
-	/** -------------------------------
-	 * State Variables
-	 * ------------------------------- */
-
 	let canvas;
 	let scene;
 	let camera;
@@ -134,24 +121,17 @@
 	let currentPlayer = 1;
 	let player1CathedralPlaced = false;
 
-	// A unified state for current actions
 	let currentAction = {
-		type: null, // 'place' or null
-		piece: null, // The THREE.Group piece currently selected
-		label: null, // Label of the currently selected piece
-		dragging: false // Whether the user is currently dragging the piece
+		type: null,
+		piece: null,
+		label: null,
+		dragging: false
 	};
 
-	// Utilities
 	const mouse = new THREE.Vector2();
 	const raycaster = new THREE.Raycaster();
 
-	/** -------------------------------
-	 * Helper Functions
-	 * ------------------------------- */
-
 	function canPlayerPlacePiece(player, label) {
-		// Player 1 must place Cathedral first
 		if (player === 1 && !player1CathedralPlaced && label !== 'Cathedral') {
 			return false;
 		}
@@ -191,26 +171,19 @@
 		const btnIndex = playerButtons[player].findIndex((btn) => btn.id === id);
 		const btn = playerButtons[player][btnIndex];
 
-		// If player can't place this piece (e.g., Cathedral not placed), return early
 		if (!canPlayerPlacePiece(player, btn.label)) return;
 
 		const isActivating = !btn.active;
 
-		// If activating a new button
 		if (isActivating) {
-			// Deactivate all other buttons and remove their pieces
 			deactivateAllButtons(player);
-
-			// Remove the currently placed piece if any
 			removeCurrentlyPlacedPiece();
 
-			// Ensure we have count to place this piece
 			if (btn.count > 0) {
 				playerButtons[player][btnIndex] = { ...btn, active: true };
 				startPlacingPiece(player, btn.label, btnIndex);
 			}
 		} else {
-			// Deactivating the same button
 			if (btn.piece) {
 				removePieceFromScene(btn.piece);
 				const pieceIndex = placedPieces.indexOf(btn.piece);
@@ -258,7 +231,7 @@
 		const group = new THREE.Group();
 		let color = label === 'Cathedral' ? 0xffffff : PLAYERS[player].color;
 		const material = new THREE.MeshBasicMaterial({ color });
-		const geometry = new THREE.BoxGeometry(1, 1, 1); // Reuse geometry
+		const geometry = new THREE.BoxGeometry(1, 1, 1);
 
 		let anchorCube = null;
 		for (let [x, z, isAnchor] of pattern) {
@@ -268,7 +241,6 @@
 			group.add(cube);
 		}
 
-		// Adjust group so anchor is at origin
 		if (anchorCube) {
 			group.position.set(-anchorCube.position.x, 0, -anchorCube.position.z);
 		}
@@ -307,7 +279,6 @@
 
 	function finalizePlacement() {
 		if (currentAction.piece && currentAction.label) {
-			// Decrement the count of the chosen piece
 			playerButtons[currentPlayer] = playerButtons[currentPlayer].map((b) => {
 				if (b.label === currentAction.label) {
 					let newCount = b.count - 1;
@@ -326,81 +297,11 @@
 	}
 
 	function endTurn() {
-		// Finish the current placement
 		finalizePlacement();
-
-		// Switch player
 		currentPlayer = currentPlayer === 1 ? 2 : 1;
 	}
 
-	/** -------------------------------
-	 * Event Handlers
-	 * ------------------------------- */
-
-	function handleMouseMove(event) {
-		if (!currentAction.dragging || !currentAction.piece || currentAction.type !== 'place') return;
-		mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-		mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-		raycaster.setFromCamera(mouse, camera);
-
-		const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-		const intersectPoint = new THREE.Vector3();
-		if (raycaster.ray.intersectPlane(plane, intersectPoint)) {
-			let snapX = Math.floor(intersectPoint.x) + 0.5;
-			let snapZ = Math.floor(intersectPoint.z) + 0.5;
-			snapX = Math.max(GRID_MIN + 0.5, Math.min(GRID_MAX - 0.5, snapX));
-			snapZ = Math.max(GRID_MIN + 0.5, Math.min(GRID_MAX - 0.5, snapZ));
-
-			const pattern = currentAction.piece.userData.pattern;
-			currentAction.piece.position.set(snapX, 1.5, snapZ);
-			hoverSquares.forEach((sq, i) => {
-				sq.position.set(snapX + pattern[i][0], 0.01, snapZ + pattern[i][1]);
-			});
-		}
-	}
-
-	function handleMouseUp() {
-		if (currentAction.dragging && currentAction.piece && currentAction.type === 'place') {
-			// Drop the piece in place
-			currentAction.piece.position.y = 0.5;
-			hoverSquares.forEach((sq) => (sq.visible = false));
-			controls.enabled = true;
-			currentAction.dragging = false;
-			currentAction.type = null;
-		}
-	}
-
-	function handleMouseDown(event) {
-		// If not dragging and we have a selected piece, check if user clicked it to pick it up again
-		if (!currentAction.dragging && currentAction.piece) {
-			mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-			mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-			raycaster.setFromCamera(mouse, camera);
-			const intersects = raycaster.intersectObjects([currentAction.piece], true);
-			if (intersects.length > 0) {
-				// User clicked on the currently selected piece
-				currentAction.dragging = true;
-				currentAction.type = 'place';
-				createHoverSquares(
-					currentAction.piece.userData.pattern,
-					currentPlayer,
-					currentAction.label
-				);
-				currentAction.piece.position.y = 1.5;
-				controls.enabled = false;
-			}
-		}
-	}
-
-	function handleResize() {
-		camera.aspect = window.innerWidth / window.innerHeight;
-		camera.updateProjectionMatrix();
-		renderer.setSize(window.innerWidth, window.innerHeight);
-	}
-
-	/** -------------------------------
-	 * Scene Initialization
-	 * ------------------------------- */
+	let handleMouseMove, handleMouseUp, handleMouseDown, handleResize;
 
 	onMount(() => {
 		scene = new THREE.Scene();
@@ -430,17 +331,84 @@
 		}
 		animate();
 
-		window.addEventListener('resize', handleResize);
-		window.addEventListener('mousemove', handleMouseMove);
-		window.addEventListener('mouseup', handleMouseUp);
-		window.addEventListener('mousedown', handleMouseDown);
+		// Define event handlers here, so they're not referenced before onMount
+		handleResize = () => {
+			if (typeof window !== 'undefined') {
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+				renderer.setSize(window.innerWidth, window.innerHeight);
+			}
+		};
+
+		handleMouseMove = (event) => {
+			if (!currentAction.dragging || !currentAction.piece || currentAction.type !== 'place') return;
+			mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+			mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+			raycaster.setFromCamera(mouse, camera);
+
+			const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+			const intersectPoint = new THREE.Vector3();
+			if (raycaster.ray.intersectPlane(plane, intersectPoint)) {
+				let snapX = Math.floor(intersectPoint.x) + 0.5;
+				let snapZ = Math.floor(intersectPoint.z) + 0.5;
+				snapX = Math.max(GRID_MIN + 0.5, Math.min(GRID_MAX - 0.5, snapX));
+				snapZ = Math.max(GRID_MIN + 0.5, Math.min(GRID_MAX - 0.5, snapZ));
+
+				const pattern = currentAction.piece.userData.pattern;
+				currentAction.piece.position.set(snapX, 1.5, snapZ);
+				hoverSquares.forEach((sq, i) => {
+					sq.position.set(snapX + pattern[i][0], 0.01, snapZ + pattern[i][1]);
+				});
+			}
+		};
+
+		handleMouseUp = () => {
+			if (currentAction.dragging && currentAction.piece && currentAction.type === 'place') {
+				currentAction.piece.position.y = 0.5;
+				hoverSquares.forEach((sq) => (sq.visible = false));
+				controls.enabled = true;
+				currentAction.dragging = false;
+				currentAction.type = null;
+			}
+		};
+
+		handleMouseDown = (event) => {
+			if (!currentAction.dragging && currentAction.piece) {
+				mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+				mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+				raycaster.setFromCamera(mouse, camera);
+				const intersects = raycaster.intersectObjects([currentAction.piece], true);
+				if (intersects.length > 0) {
+					currentAction.dragging = true;
+					currentAction.type = 'place';
+					createHoverSquares(
+						currentAction.piece.userData.pattern,
+						currentPlayer,
+						currentAction.label
+					);
+					currentAction.piece.position.y = 1.5;
+					controls.enabled = false;
+				}
+			}
+		};
+
+		// Add event listeners only if window is defined
+		if (typeof window !== 'undefined') {
+			window.addEventListener('resize', handleResize);
+			window.addEventListener('mousemove', handleMouseMove);
+			window.addEventListener('mouseup', handleMouseUp);
+			window.addEventListener('mousedown', handleMouseDown);
+		}
 	});
 
 	onDestroy(() => {
-		window.removeEventListener('resize', handleResize);
-		window.removeEventListener('mousemove', handleMouseMove);
-		window.removeEventListener('mouseup', handleMouseUp);
-		window.removeEventListener('mousedown', handleMouseDown);
+		// Remove event listeners if window is defined
+		if (typeof window !== 'undefined') {
+			window.removeEventListener('resize', handleResize);
+			window.removeEventListener('mousemove', handleMouseMove);
+			window.removeEventListener('mouseup', handleMouseUp);
+			window.removeEventListener('mousedown', handleMouseDown);
+		}
 	});
 </script>
 
