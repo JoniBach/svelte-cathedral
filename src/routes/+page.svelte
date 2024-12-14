@@ -7,8 +7,8 @@
 	// CONFIG & CONSTANTS
 	// ─────────────────────────────────────────────────────────────────────────────
 
-	const GRID_MIN = -5;
-	const GRID_MAX = 5;
+	const GRID_MIN = -5.5;
+	const GRID_MAX = 4.5;
 
 	const PLAYERS = {
 		1: { name: 'Player 1', color: 0x0077ff },
@@ -547,7 +547,7 @@
 				if (snapZ > GRID_MAX) snapZ = GRID_MAX;
 
 				const pattern = currentAction.piece.userData.pattern;
-				currentAction.piece.position.set(snapX, 1.5, snapZ);
+				currentAction.piece.position.set(snapX, 1, snapZ);
 				hoverSquares.forEach((sq, i) => {
 					sq.position.set(snapX + pattern[i][0], 0.01, snapZ + pattern[i][1]);
 				});
