@@ -209,39 +209,6 @@
 		return true;
 	}
 
-	function isEncapsulated(piece) {
-		const cells = getPieceCells(piece);
-		const directions = [
-			[-1, 0],
-			[1, 0],
-			[0, -1],
-			[0, 1] // left, right, down, up
-		];
-
-		// Check if at least one neighboring cell is open for any occupied cell
-		for (let cell of cells) {
-			const [x, z] = cell.split(',').map(Number);
-
-			for (let [dx, dz] of directions) {
-				const neighborX = x + dx;
-				const neighborZ = z + dz;
-
-				// If a neighbor is out of bounds or not occupied, it's not encapsulated
-				if (
-					neighborX < GRID_MIN ||
-					neighborX > GRID_MAX ||
-					neighborZ < GRID_MIN ||
-					neighborZ > GRID_MAX ||
-					!occupiedCells.has(`${neighborX},${neighborZ}`)
-				) {
-					return false; // Found an open side
-				}
-			}
-		}
-
-		return true; // Fully enclosed if no open sides were found
-	}
-
 	function canPlayerPlacePiece(player, label) {
 		// Ensure Cathedral is only placeable if not already placed
 		if (label === 'Cathedral' && cathedralPlaced) {
