@@ -241,6 +241,7 @@
 			group.add(cube);
 		}
 
+		// Move the piece so that the anchor cube is at local (0,0)
 		if (anchorCube) {
 			group.position.set(-anchorCube.position.x, 0, -anchorCube.position.z);
 		}
@@ -262,11 +263,16 @@
 			opacity: 0.5
 		});
 
+		const piecePos = currentAction.piece
+			? currentAction.piece.position
+			: new THREE.Vector3(0, 0, 0);
+
 		for (let [x, z] of pattern) {
 			const planeGeometry = new THREE.PlaneGeometry(1, 1);
 			const square = new THREE.Mesh(planeGeometry, hoverMaterial);
 			square.rotation.x = -Math.PI / 2;
-			square.position.set(x, 0.01, z);
+			// Place square under the piece based on the piece's world position
+			square.position.set(piecePos.x + x, 0.01, piecePos.z + z);
 			hoverGroup.add(square);
 			hoverSquares.push(square);
 		}
@@ -301,6 +307,79 @@
 		currentPlayer = currentPlayer === 1 ? 2 : 1;
 	}
 
+	// Rotation functions
+	function rotatePatternClockwise(pattern) {
+		const anchorIndex = pattern.findIndex(([x, z, a]) => a);
+		if (anchorIndex === -1) return pattern;
+		const [ax, az] = pattern[anchorIndex];
+
+		const shifted = pattern.map(([x, z, a]) => [x - ax, z - az, a]);
+		const rotated = shifted.map(([x, z, a]) => [z, -x, a]);
+
+		return rotated.map(([x, z, a]) => [x + ax, z + az, a]);
+	}
+
+	function rotatePatternCounterClockwise(pattern) {
+		const anchorIndex = pattern.findIndex(([x, z, a]) => a);
+		if (anchorIndex === -1) return pattern;
+		const [ax, az] = pattern[anchorIndex];
+
+		const shifted = pattern.map(([x, z, a]) => [x - ax, z - az, a]);
+		const rotated = shifted.map(([x, z, a]) => [-z, x, a]);
+		return rotated.map(([x, z, a]) => [x + ax, z + az, a]);
+	}
+
+	// Update piece pattern without changing its world position
+	function updatePiecePattern(newPattern) {
+		if (!currentAction.piece) return;
+
+		const oldWorldPos = currentAction.piece.position.clone();
+		const { player, label } = currentAction.piece.userData;
+		currentAction.piece.userData.pattern = newPattern;
+
+		// Remove old cubes
+		while (currentAction.piece.children.length > 0) {
+			const child = currentAction.piece.children.pop();
+			currentAction.piece.remove(child);
+		}
+
+		let color = label === 'Cathedral' ? 0xffffff : PLAYERS[player].color;
+		const material = new THREE.MeshBasicMaterial({ color });
+		const geometry = new THREE.BoxGeometry(1, 1, 1);
+
+		let anchorCube = null;
+		for (let [x, z, isAnchor] of newPattern) {
+			const cube = new THREE.Mesh(geometry, material);
+			cube.position.set(x, 0, z);
+			if (isAnchor) anchorCube = cube;
+			currentAction.piece.add(cube);
+		}
+
+		// Recenter so the anchor is at local (0,0)
+		if (anchorCube) {
+			currentAction.piece.position.set(-anchorCube.position.x, 0, -anchorCube.position.z);
+		}
+
+		// Restore the piece's world position
+		currentAction.piece.position.copy(oldWorldPos);
+
+		// Now create the hover squares at the correct location
+		removeHoverSquares();
+		createHoverSquares(newPattern, player, label);
+	}
+
+	function rotatePieceClockwise() {
+		if (!currentAction.piece || !currentAction.piece.userData.pattern) return;
+		const rotatedPattern = rotatePatternClockwise(currentAction.piece.userData.pattern);
+		updatePiecePattern(rotatedPattern);
+	}
+
+	function rotatePieceCounterClockwise() {
+		if (!currentAction.piece || !currentAction.piece.userData.pattern) return;
+		const rotatedPattern = rotatePatternCounterClockwise(currentAction.piece.userData.pattern);
+		updatePiecePattern(rotatedPattern);
+	}
+
 	let handleMouseMove, handleMouseUp, handleMouseDown, handleResize;
 
 	onMount(() => {
@@ -331,7 +410,6 @@
 		}
 		animate();
 
-		// Define event handlers here, so they're not referenced before onMount
 		handleResize = () => {
 			if (typeof window !== 'undefined') {
 				camera.aspect = window.innerWidth / window.innerHeight;
@@ -368,7 +446,7 @@
 				hoverSquares.forEach((sq) => (sq.visible = false));
 				controls.enabled = true;
 				currentAction.dragging = false;
-				currentAction.type = null;
+				currentAction.type = null; // After placing, type is null, but we still have a selected piece
 			}
 		};
 
@@ -392,7 +470,6 @@
 			}
 		};
 
-		// Add event listeners only if window is defined
 		if (typeof window !== 'undefined') {
 			window.addEventListener('resize', handleResize);
 			window.addEventListener('mousemove', handleMouseMove);
@@ -402,7 +479,6 @@
 	});
 
 	onDestroy(() => {
-		// Remove event listeners if window is defined
 		if (typeof window !== 'undefined') {
 			window.removeEventListener('resize', handleResize);
 			window.removeEventListener('mousemove', handleMouseMove);
@@ -431,6 +507,16 @@
 				{label}{count > 0 ? ` (${count})` : ''}
 			</button>
 		{/each}
+
+		<button on:click={rotatePieceClockwise} disabled={!currentAction.piece || currentPlayer !== 1}>
+			Rotate CW
+		</button>
+		<button
+			on:click={rotatePieceCounterClockwise}
+			disabled={!currentAction.piece || currentPlayer !== 1}
+		>
+			Rotate CCW
+		</button>
 	</div>
 
 	<div class="button-overlay player2-overlay">
@@ -446,6 +532,16 @@
 				{label}{count > 0 ? ` (${count})` : ''}
 			</button>
 		{/each}
+
+		<button on:click={rotatePieceClockwise} disabled={!currentAction.piece || currentPlayer !== 2}>
+			Rotate CW
+		</button>
+		<button
+			on:click={rotatePieceCounterClockwise}
+			disabled={!currentAction.piece || currentPlayer !== 2}
+		>
+			Rotate CCW
+		</button>
 	</div>
 
 	<div class="turn-overlay">
