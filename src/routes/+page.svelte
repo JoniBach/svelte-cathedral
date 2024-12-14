@@ -7,7 +7,7 @@
 	// CONFIG & CONSTANTS
 	// ─────────────────────────────────────────────────────────────────────────────
 
-	const GRID_MIN = -5.5;
+	const GRID_MIN = -4.5;
 	const GRID_MAX = 4.5;
 
 	const PLAYERS = {
