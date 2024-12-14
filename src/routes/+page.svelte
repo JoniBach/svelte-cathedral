@@ -85,7 +85,7 @@
 			1: [
 				{ label: 'Cathedral', id: 'btnCathedralP1', count: 1, active: false, piece: null },
 				{ label: 'Castle', id: 'btnCastleP1', count: 1, active: false, piece: null },
-				{ label: 'Infirmiry', id: 'btnInfirmiryP1', count: 2, active: false, piece: null },
+				{ label: 'Infirmiry', id: 'btnInfirmiryP1', count: 1, active: false, piece: null },
 				{ label: 'Academy', id: 'btnAcademyP1', count: 1, active: false, piece: null },
 				{ label: 'Abbey', id: 'btnAbbeyP1', count: 1, active: false, piece: null },
 				{ label: 'Manor', id: 'btnManorP1', count: 1, active: false, piece: null },
@@ -244,9 +244,8 @@
 	function createHoverSquares(pattern, player, label) {
 		removeHoverSquares();
 		const hoverColor =
-			player === 1 && !player1CathedralPlaced && label === 'Cathedral'
-				? 0xffffff
-				: PLAYERS[player].color;
+			player === 1 && !player1CathedralPlaced && label === 'Cathedral' ? 0xffffff : 0xaaaaaa;
+		// : PLAYERS[player].color;
 
 		const hoverMaterial = new THREE.MeshBasicMaterial({
 			color: hoverColor,
