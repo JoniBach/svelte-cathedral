@@ -330,32 +330,45 @@
 		return group;
 	}
 
+	// ─────────────────────────────────────────────────────────────────────────────
+	// Utility Function: Shade a Square
+	// ─────────────────────────────────────────────────────────────────────────────
+	function shadeSquare(x, z, color, opacity) {
+		const planeGeometry = new THREE.PlaneGeometry(1, 1);
+		const material = new THREE.MeshBasicMaterial({
+			color: color,
+			transparent: true,
+			opacity: opacity
+		});
+		const square = new THREE.Mesh(planeGeometry, material);
+		square.rotation.x = -Math.PI / 2;
+		square.position.set(x, 0.01, z);
+		return square;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────────
+	// Create Hover Squares using shadeSquare
+	// ─────────────────────────────────────────────────────────────────────────────
 	function createHoverSquares(pattern, player, label) {
 		removeHoverSquares();
+
 		const hoverColor =
 			player === 1 && !player1CathedralPlaced && label === 'Cathedral' ? 0xffffff : 0xaaaaaa;
-		// : PLAYERS[player].color;
-
-		const hoverMaterial = new THREE.MeshBasicMaterial({
-			color: hoverColor,
-			transparent: true,
-			opacity: hoverOpacity
-		});
 
 		const piecePos = currentAction.piece
 			? currentAction.piece.position
 			: new THREE.Vector3(0, 0, 0);
 
 		for (let [x, z] of pattern) {
-			const planeGeometry = new THREE.PlaneGeometry(1, 1);
-			const square = new THREE.Mesh(planeGeometry, hoverMaterial);
-			square.rotation.x = -Math.PI / 2;
-			square.position.set(piecePos.x + x, 0.01, piecePos.z + z);
-			hoverGroup.add(square);
-			hoverSquares.push(square);
+			const hoverSquare = shadeSquare(piecePos.x + x, piecePos.z + z, hoverColor, hoverOpacity);
+			hoverGroup.add(hoverSquare);
+			hoverSquares.push(hoverSquare);
 		}
 	}
 
+	// ─────────────────────────────────────────────────────────────────────────────
+	// Utility: Remove Hover Squares
+	// ─────────────────────────────────────────────────────────────────────────────
 	function removeHoverSquares() {
 		hoverSquares.forEach((sq) => hoverGroup.remove(sq));
 		hoverSquares = [];
