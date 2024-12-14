@@ -133,8 +133,8 @@
 		const isActivating = !btn.active;
 
 		if (isActivating) {
-			// Deactivate all other buttons and remove their pieces
-			playerButtons[player] = playerButtons[player].map((b, idx) => {
+			// Remove current piece if exists
+			playerButtons[player] = playerButtons[player].map((b) => {
 				if (b.active && b.piece) {
 					scene.remove(b.piece);
 					const pieceIndex = placedPieces.indexOf(b.piece);
@@ -144,7 +144,7 @@
 				return { ...b, active: false };
 			});
 
-			// If a piece is currently placed this turn, remove it before adding a new one
+			// If we have a selectedPiece already placed this turn, remove it before changing
 			if (selectedPiece) {
 				scene.remove(selectedPiece);
 				const index = placedPieces.indexOf(selectedPiece);
@@ -161,7 +161,7 @@
 				isDragging = true;
 			}
 		} else {
-			// Turning off the same button:
+			// Deactivating the same button
 			if (btn.piece) {
 				scene.remove(btn.piece);
 				const pieceIndex = placedPieces.indexOf(btn.piece);
@@ -312,9 +312,35 @@
 				hoverSquares.forEach((sq) => (sq.visible = false));
 				controls.enabled = true;
 
-				// Don't decrement count or finalize yet. Player can still change or move piece.
+				// Don't clear selectedPiece or selectedPieceLabel here, so we can pick it up again.
 				isDragging = false;
 				actionType = null;
+			}
+		});
+
+		window.addEventListener('mousedown', (event) => {
+			// If not dragging and we have a selectedPiece, check if user clicked it to pick it up again
+			if (!isDragging && selectedPiece) {
+				mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+				mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+				raycaster.setFromCamera(mouse, camera);
+				const intersects = raycaster.intersectObjects([selectedPiece], true);
+
+				if (intersects.length > 0) {
+					// User clicked on the currently selected piece
+					isDragging = true;
+					actionType = 'place';
+					// Recreate hover squares to show placement positions
+					createHoverSquares(
+						selectedPiece.userData.pattern,
+						currentPlayer,
+						'place',
+						selectedPiece.userData.label
+					);
+					// Raise the piece slightly as feedback
+					selectedPiece.position.y = 1.5;
+					controls.enabled = false;
+				}
 			}
 		});
 	});
