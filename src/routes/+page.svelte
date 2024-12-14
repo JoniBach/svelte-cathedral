@@ -83,7 +83,7 @@
 	function getInitialPlayerButtons() {
 		return {
 			1: [
-				{ label: 'Cathedral', id: 'btnCathedralP1', count: 1, active: false, piece: null },
+				{ label: 'Cathedral', id: 'btnCathedral', count: 1, active: false, piece: null },
 				{ label: 'Castle', id: 'btnCastleP1', count: 1, active: false, piece: null },
 				{ label: 'Infirmiry', id: 'btnInfirmiryP1', count: 1, active: false, piece: null },
 				{ label: 'Academy', id: 'btnAcademyP1', count: 1, active: false, piece: null },
@@ -96,7 +96,7 @@
 				{ label: 'Tavern', id: 'btnTavernP1', count: 2, active: false, piece: null }
 			],
 			2: [
-				{ label: 'Cathedral', id: 'btnCathedralP2', count: 0, active: false, piece: null },
+				{ label: 'Cathedral', id: 'btnCathedral', count: 0, active: false, piece: null },
 				{ label: 'Castle', id: 'btnCastleP2', count: 1, active: false, piece: null },
 				{ label: 'Infirmiry', id: 'btnInfirmiryP2', count: 1, active: false, piece: null },
 				{ label: 'Academy', id: 'btnAcademyP2', count: 1, active: false, piece: null },
@@ -137,7 +137,10 @@
 		dragging: false
 	};
 
-	const occupiedCells = new Set();
+	let cathedralPlaced = false;
+
+	const occupiedCells = new Map();
+	const encapsulatedCells = new Map();
 
 	const mouse = new THREE.Vector2();
 	const raycaster = new THREE.Raycaster();
@@ -154,11 +157,97 @@
 	// UTILITY FUNCTIONS
 	// ─────────────────────────────────────────────────────────────────────────────
 
-	function canPlayerPlacePiece(player, label) {
-		if (player === 1 && !player1CathedralPlaced && label !== 'Cathedral') {
-			return false;
+	function isEncapsulatedByOpponent(piece, player) {
+		const cells = getPieceCells(piece);
+
+		// Add diagonal directions to the checking logic
+		const directions = [
+			[-1, 0],
+			[1, 0], // left, right
+			[0, -1],
+			[0, 1], // down, up
+			[-1, -1],
+			[1, -1], // bottom-left, bottom-right
+			[-1, 1],
+			[1, 1] // top-left, top-right
+		];
+
+		for (let cell of cells) {
+			const [x, z] = cell.split(',').map(Number);
+
+			for (let [dx, dz] of directions) {
+				const neighborX = x + dx;
+				const neighborZ = z + dz;
+				const neighborKey = `${neighborX},${neighborZ}`;
+
+				// Check if the neighbor is outside the grid
+				if (
+					neighborX < GRID_MIN ||
+					neighborX > GRID_MAX ||
+					neighborZ < GRID_MIN ||
+					neighborZ > GRID_MAX ||
+					!occupiedCells.has(neighborKey)
+				) {
+					return false; // Open side found
+				}
+
+				// If the neighbor belongs to the same player or is neutral, it’s not encapsulated
+				if (
+					occupiedCells.get(neighborKey) === player ||
+					occupiedCells.get(neighborKey) === 'Cathedral'
+				) {
+					return false;
+				}
+			}
 		}
+
+		// Mark cells as encapsulated
+		for (const c of cells) {
+			encapsulatedCells.set(c, player);
+		}
+
 		return true;
+	}
+
+	function isEncapsulated(piece) {
+		const cells = getPieceCells(piece);
+		const directions = [
+			[-1, 0],
+			[1, 0],
+			[0, -1],
+			[0, 1] // left, right, down, up
+		];
+
+		// Check if at least one neighboring cell is open for any occupied cell
+		for (let cell of cells) {
+			const [x, z] = cell.split(',').map(Number);
+
+			for (let [dx, dz] of directions) {
+				const neighborX = x + dx;
+				const neighborZ = z + dz;
+
+				// If a neighbor is out of bounds or not occupied, it's not encapsulated
+				if (
+					neighborX < GRID_MIN ||
+					neighborX > GRID_MAX ||
+					neighborZ < GRID_MIN ||
+					neighborZ > GRID_MAX ||
+					!occupiedCells.has(`${neighborX},${neighborZ}`)
+				) {
+					return false; // Found an open side
+				}
+			}
+		}
+
+		return true; // Fully enclosed if no open sides were found
+	}
+
+	function canPlayerPlacePiece(player, label) {
+		// Ensure Cathedral is only placeable if not already placed
+		if (label === 'Cathedral' && cathedralPlaced) {
+			return false; // No player can place Cathedral again
+		}
+		return true; // All other placements allowed
 	}
 
 	function removePieceFromScene(piece) {
@@ -300,32 +389,37 @@
 		}
 
 		if (currentAction.dragging) {
-			errors.push('Place the piece on the grid before ending turn.');
+			errors.push('Place the piece on the grid before ending the turn.');
 		}
 
-		const { pattern } = piece.userData;
+		const { pattern, player, label } = piece.userData;
 		const piecePos = piece.position;
 
 		for (let [px, pz] of pattern) {
 			const cubeX = piecePos.x + px;
 			const cubeZ = piecePos.z + pz;
+			const cellKey = `${Math.floor(cubeX)},${Math.floor(cubeZ)}`;
 
+			// Check grid boundaries
 			if (cubeX < GRID_MIN || cubeX > GRID_MAX || cubeZ < GRID_MIN || cubeZ > GRID_MAX) {
-				errors.push('Part of the piece is outside the grid boundaries.');
-				// If one is outside, no need to check others for boundary
+				errors.push('Piece is outside the grid boundaries.');
+				break;
+			}
+
+			// Check if the cell is occupied
+			if (
+				occupiedCells.has(cellKey) &&
+				occupiedCells.get(cellKey) !== player &&
+				occupiedCells.get(cellKey) !== 'Cathedral'
+			) {
+				errors.push("Piece intersects with an opponent's piece.");
 				break;
 			}
 		}
 
-		if (errors.length === 0) {
-			// Check intersections if no boundary error
-			const cells = getPieceCells(piece);
-			for (const c of cells) {
-				if (occupiedCells.has(c)) {
-					errors.push('The piece intersects with another placed piece.');
-					break;
-				}
-			}
+		// Add encapsulation rule validation
+		if (label !== 'Cathedral' && isEncapsulatedByOpponent(piece, player)) {
+			errors.push('Piece must have at least one open side.');
 		}
 
 		return errors;
@@ -336,14 +430,22 @@
 	 */
 	function commitPlacement(piece) {
 		const cells = getPieceCells(piece);
+		const { label } = piece.userData;
+
 		for (const c of cells) {
-			occupiedCells.add(c);
+			if (label === 'Cathedral') {
+				occupiedCells.set(c, 'Cathedral'); // Mark as neutral
+			} else {
+				const { player } = piece.userData;
+				occupiedCells.set(c, player); // Assign to the correct player
+			}
 		}
 	}
 
 	function finalizePlacement() {
 		const label = currentAction.label;
 		const piece = currentAction.piece;
+
 		if (piece && label) {
 			playerButtons[currentPlayer] = playerButtons[currentPlayer].map((b) => {
 				if (b.label === label) {
@@ -354,8 +456,9 @@
 				return { ...b, active: false, piece: null };
 			});
 
-			if (currentPlayer === 1 && label === 'Cathedral' && !player1CathedralPlaced) {
-				player1CathedralPlaced = true;
+			// Mark Cathedral as placed
+			if (label === 'Cathedral' && !cathedralPlaced) {
+				cathedralPlaced = true; // Neutral placement, no player ownership
 			}
 		}
 
