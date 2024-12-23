@@ -6,11 +6,9 @@
 	const rows = 10,
 		columns = 10;
 
-	// Track active piece and piece counts
 	let activePiece = null;
 	let pieceCounts = Object.fromEntries(PIECES.map((piece) => [piece.name, 0]));
 
-	// Initialize the grid
 	const initGrid = () =>
 		(grid = Array.from({ length: rows * columns }, (_, index) => ({
 			cell: [Math.floor(index / columns), index % columns],
@@ -18,34 +16,32 @@
 			hover: false
 		})));
 
-	// Check if a cell is available
-	const isAvailable = ([row, col]) =>
-		grid.find((cell) => cell.cell[0] === row && cell.cell[1] === col)?.id === 'default';
+	const getCell = ([row, col]) => grid.find((cell) => cell.cell[0] === row && cell.cell[1] === col);
 
-	// Update hover or occupied states
+	const isAvailable = ([row, col]) => getCell([row, col])?.id === 'default';
+
 	const updateGrid = (callback) => {
-		grid = grid.map((cell) => callback(cell));
+		grid = grid.map(callback);
 	};
 
 	const activateCells = (baseIndex) => {
 		if (!activePiece) return;
-		const pieceLimitReached = pieceCounts[activePiece.name] >= activePiece.count;
-		if (pieceLimitReached) return alert(`${activePiece.name} placement limit reached.`);
+		const { name, cells, count } = activePiece;
+		if (pieceCounts[name] >= count) return alert(`${name} placement limit reached.`);
 
 		const baseCell = grid[baseIndex].cell;
-		const canPlace = activePiece.cells.every(({ cell }) =>
-			isAvailable([baseCell[0] + cell[0], baseCell[1] + cell[1]])
-		);
+		if (!cells.every(({ cell }) => isAvailable([baseCell[0] + cell[0], baseCell[1] + cell[1]]))) {
+			return alert(`Cannot place ${name} due to overlap.`);
+		}
 
-		if (!canPlace) return alert(`Cannot place ${activePiece.name} due to overlap.`);
-
-		pieceCounts[activePiece.name]++;
-		updateGrid((cell) => {
-			const isOccupied = activePiece.cells.some(
+		pieceCounts[name]++;
+		updateGrid((cell) =>
+			cells.some(
 				(p) => p.cell[0] + baseCell[0] === cell.cell[0] && p.cell[1] + baseCell[1] === cell.cell[1]
-			);
-			return isOccupied ? { ...cell, id: activePiece.name } : cell;
-		});
+			)
+				? { ...cell, id: name }
+				: cell
+		);
 		calculateShading();
 	};
 
@@ -53,30 +49,33 @@
 		const visited = Array(rows)
 			.fill()
 			.map(() => Array(columns).fill(false));
+
+		const directions = [
+			[-1, 0],
+			[1, 0],
+			[0, -1],
+			[0, 1],
+			[-1, -1],
+			[-1, 1],
+			[1, -1],
+			[1, 1]
+		];
+
 		const markOutside = (x, y) => {
 			if (x < 0 || y < 0 || x >= rows || y >= columns || visited[x][y] || !isAvailable([x, y]))
 				return;
 			visited[x][y] = true;
-			[
-				[-1, 0],
-				[1, 0],
-				[0, -1],
-				[0, 1],
-				[-1, -1],
-				[-1, 1],
-				[1, -1],
-				[1, 1]
-			].forEach(([dx, dy]) => markOutside(x + dx, y + dy));
+			directions.forEach(([dx, dy]) => markOutside(x + dx, y + dy));
 		};
 
-		[...Array(rows).keys()].forEach((i) => {
+		for (let i = 0; i < rows; i++) {
 			markOutside(i, 0);
 			markOutside(i, columns - 1);
-		});
-		[...Array(columns).keys()].forEach((j) => {
+		}
+		for (let j = 0; j < columns; j++) {
 			markOutside(0, j);
 			markOutside(rows - 1, j);
-		});
+		}
 
 		updateGrid((cell) => {
 			const [row, col] = cell.cell;
@@ -86,8 +85,9 @@
 
 	const rotatePiece = (direction) => {
 		if (!activePiece) return;
+		const rotate = ([x, y]) => (direction === 'clockwise' ? [y, -x] : [-y, x]);
 		activePiece.cells = activePiece.cells.map(({ cell }) => ({
-			cell: direction === 'clockwise' ? [cell[1], -cell[0]] : [-cell[1], cell[0]],
+			cell: rotate(cell),
 			id: activePiece.name
 		}));
 	};
@@ -103,7 +103,7 @@
 			const isHovered = activePiece.cells.some(
 				(p) => p.cell[0] + baseCell[0] === cell.cell[0] && p.cell[1] + baseCell[1] === cell.cell[1]
 			);
-			return isHovered ? { ...cell, hover } : { ...cell, hover: false };
+			return { ...cell, hover: isHovered ? hover : false };
 		});
 	};
 
@@ -152,8 +152,6 @@
 	.cell {
 		border-bottom: 1px solid black;
 		border-right: 1px solid black;
-		border-left: none;
-		border-top: none;
 		display: flex;
 		justify-content: center;
 		align-items: center;
