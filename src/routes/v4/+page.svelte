@@ -1,6 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
-	import { PIECES } from '../pieces.js';
+	import { PIECES, CATHEDRAL } from '../pieces.js';
 
 	// Game variables
 	let grid = [];
@@ -16,14 +16,68 @@
 
 	let currentPlayer = 'player1';
 	let scores = { player1: 0, player2: 0 };
+	function placeCathedral() {
+		activePiece = { ...CATHEDRAL, owner: null }; // No owner for the CPU piece
 
-	const initGrid = () =>
-		(grid = Array.from({ length: rows * columns }, (_, index) => ({
+		// Rotate the piece randomly
+		const randomRotation = Math.floor(Math.random() * 4);
+		for (let i = 0; i < randomRotation; i++) {
+			rotatePiece('clockwise');
+		}
+
+		// Function to check if the piece can be placed at a given position
+		const canPlacePiece = (row, col) => {
+			return activePiece.cells.every(({ cell }) => {
+				const newRow = row + cell[0];
+				const newCol = col + cell[1];
+				return isAvailable([newRow, newCol]);
+			});
+		};
+
+		// Find all valid positions
+		const legalPositions = [];
+		for (let row = 0; row < rows; row++) {
+			for (let col = 0; col < columns; col++) {
+				if (canPlacePiece(row, col)) {
+					legalPositions.push({ row, col });
+				}
+			}
+		}
+
+		if (legalPositions.length > 0) {
+			// Choose a random valid position
+			const randomIndex = Math.floor(Math.random() * legalPositions.length);
+			const { row, col } = legalPositions[randomIndex];
+
+			// Place the piece by updating grid cells directly
+			const baseCell = grid[row * columns + col].cell;
+
+			grid = grid.map((cell) =>
+				activePiece.cells.some(
+					(p) =>
+						p.cell[0] + baseCell[0] === cell.cell[0] && p.cell[1] + baseCell[1] === cell.cell[1]
+				)
+					? { ...cell, id: 'cpu', owner: null } // Set `id` as 'cpu' and `owner` as null
+					: cell
+			);
+
+			console.log(`Placed Cathedral at: Row ${row}, Column ${col}`);
+			activePiece = null;
+		} else {
+			console.log('No legal position found for Cathedral');
+		}
+	}
+
+	const initGrid = () => {
+		grid = Array.from({ length: rows * columns }, (_, index) => ({
 			cell: [Math.floor(index / columns), index % columns],
 			id: 'default',
 			owner: null,
 			hover: false
-		})));
+		}));
+
+		placeCathedral();
+	};
 
 	const getCell = ([row, col]) => grid.find((cell) => cell.cell[0] === row && cell.cell[1] === col);
 
@@ -31,8 +85,12 @@
 		const cell = getCell([row, col]);
 		if (!cell) return false;
 
-		// Allow placement if the cell is 'default' or 'shaded' and owned by the current player
-		return cell.id === 'default' || (cell.id === 'shaded' && cell.owner === currentPlayer);
+		// Allow placement if the cell is 'default', 'shaded', or 'cpu' and owned by no one
+		return (
+			cell.id === 'default' ||
+			(cell.id === 'shaded' && cell.owner === currentPlayer) ||
+			(cell.id === 'cpu' && cell.owner === null)
+		);
 	};
 
 	const updateGrid = (callback) => {
@@ -144,7 +202,10 @@
 		});
 	};
 
-	onMount(initGrid);
+	onMount(() => {
+		initGrid();
+		calculateShading();
+	});
 </script>
 
 <div class="grid">
@@ -198,6 +259,10 @@
 	.cell.default {
 		background-color: lightgray;
 	}
+	.cell.cpu {
+		background-color: skyblue;
+	}
+
 	.cell.shaded {
 		background-color: rgba(173, 216, 230, 0.5);
 	}
@@ -208,7 +273,7 @@
 		background-color: rgba(255, 182, 193, 0.5);
 	}
 	.cell.hover {
-		background-color: yellow;
+		background-color: yellow !important;
 	}
 
 	.cell.player1 {

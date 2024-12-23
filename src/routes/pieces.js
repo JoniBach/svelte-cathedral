@@ -1,12 +1,12 @@
 export const PIECE = {
-	Cathedral: [
-		[1, 0],
-		[0, 1],
-		[1, 1],
-		[2, 1],
-		[1, 2],
-		[1, 3]
-	],
+	// Cathedral: [
+	// 	[1, 0],
+	// 	[0, 1],
+	// 	[1, 1],
+	// 	[2, 1],
+	// 	[1, 2],
+	// 	[1, 3]
+	// ],
 	Castle: [
 		[0, 0],
 		[1, 0],
@@ -61,6 +61,21 @@ export const PIECE = {
 		[1, 0]
 	],
 	Tavern: [[0, 0]]
+};
+
+const cathedral = [
+	[1, 0],
+	[0, 1],
+	[1, 1],
+	[2, 1],
+	[1, 2],
+	[1, 3]
+];
+
+export const CATHEDRAL = {
+	name: 'Cathedral',
+	cells: cathedral.map((cell) => ({ cell, id: 'Cathedral' })),
+	count: 1
 };
 
 export let PIECES = Object.keys(PIECE).map((key) => ({
