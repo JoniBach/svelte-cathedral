@@ -2,47 +2,72 @@
 	import { onMount } from 'svelte';
 	import { PIECES } from '../pieces.js';
 
+	// Game variables
 	let grid = [];
 	const rows = 10,
 		columns = 10;
 
 	let activePiece = null;
-	let pieceCounts = Object.fromEntries(PIECES.map((piece) => [piece.name, 0]));
+	let pieceCounts = { player1: {}, player2: {} };
+	PIECES.forEach((piece) => {
+		pieceCounts.player1[piece.name] = 0;
+		pieceCounts.player2[piece.name] = 0;
+	});
+
+	let currentPlayer = 'player1';
+	let scores = { player1: 0, player2: 0 };
 
 	const initGrid = () =>
 		(grid = Array.from({ length: rows * columns }, (_, index) => ({
 			cell: [Math.floor(index / columns), index % columns],
 			id: 'default',
+			owner: null,
 			hover: false
 		})));
 
 	const getCell = ([row, col]) => grid.find((cell) => cell.cell[0] === row && cell.cell[1] === col);
 
-	const isAvailable = ([row, col]) => getCell([row, col])?.id === 'default';
+	const isAvailable = ([row, col]) => {
+		const cell = getCell([row, col]);
+		if (!cell) return false;
+
+		// Allow placement if the cell is 'default' or 'shaded' and owned by the current player
+		return cell.id === 'default' || (cell.id === 'shaded' && cell.owner === currentPlayer);
+	};
 
 	const updateGrid = (callback) => {
 		grid = grid.map(callback);
 	};
 
 	const activateCells = (baseIndex) => {
-		if (!activePiece) return;
+		if (!activePiece || activePiece.owner !== currentPlayer) return;
 		const { name, cells, count } = activePiece;
-		if (pieceCounts[name] >= count) return alert(`${name} placement limit reached.`);
 
-		const baseCell = grid[baseIndex].cell;
-		if (!cells.every(({ cell }) => isAvailable([baseCell[0] + cell[0], baseCell[1] + cell[1]]))) {
-			return alert(`Cannot place ${name} due to overlap.`);
+		if (pieceCounts[currentPlayer][name] >= count) {
+			return alert(`${name} placement limit reached.`);
 		}
 
-		pieceCounts[name]++;
+		const baseCell = grid[baseIndex].cell;
+
+		if (!cells.every(({ cell }) => isAvailable([baseCell[0] + cell[0], baseCell[1] + cell[1]]))) {
+			return alert(`Cannot place ${name} due to overlap or invalid cells.`);
+		}
+
+		pieceCounts[currentPlayer][name]++;
 		updateGrid((cell) =>
 			cells.some(
 				(p) => p.cell[0] + baseCell[0] === cell.cell[0] && p.cell[1] + baseCell[1] === cell.cell[1]
 			)
-				? { ...cell, id: name }
+				? { ...cell, id: name, owner: currentPlayer }
 				: cell
 		);
 		calculateShading();
+		calculateScores();
+		switchTurn();
+	};
+
+	const switchTurn = () => {
+		currentPlayer = currentPlayer === 'player1' ? 'player2' : 'player1';
 	};
 
 	const calculateShading = () => {
@@ -79,7 +104,17 @@
 
 		updateGrid((cell) => {
 			const [row, col] = cell.cell;
-			return !visited[row][col] && cell.id === 'default' ? { ...cell, id: 'shaded' } : cell;
+			if (!visited[row][col] && cell.id === 'default') {
+				return { ...cell, id: 'shaded', owner: currentPlayer };
+			}
+			return cell;
+		});
+	};
+
+	const calculateScores = () => {
+		scores = { player1: 0, player2: 0 };
+		grid.forEach((cell) => {
+			if (cell.owner) scores[cell.owner]++;
 		});
 	};
 
@@ -93,12 +128,13 @@
 	};
 
 	const togglePiece = (piece) => {
-		activePiece = activePiece === piece ? null : piece;
+		activePiece = activePiece === piece ? null : { ...piece, owner: currentPlayer };
 	};
 
 	const handleMouse = (baseIndex, hover) => {
 		if (!activePiece) return;
 		const baseCell = grid[baseIndex].cell;
+
 		updateGrid((cell) => {
 			const isHovered = activePiece.cells.some(
 				(p) => p.cell[0] + baseCell[0] === cell.cell[0] && p.cell[1] + baseCell[1] === cell.cell[1]
@@ -116,7 +152,7 @@
 			on:click={() => activateCells(index)}
 			on:mouseenter={() => handleMouse(index, true)}
 			on:mouseleave={() => handleMouse(index, false)}
-			class="cell {cell.id} {cell.hover ? 'hover' : ''}"
+			class="cell {cell.id} {cell.owner} {cell.hover ? 'hover' : ''}"
 		>
 			{cell.cell[0]},{cell.cell[1]}
 		</div>
@@ -126,11 +162,11 @@
 <div class="controls">
 	{#each PIECES as piece}
 		<button
-			class:active={activePiece?.name === piece.name}
+			class:active={activePiece?.name === piece.name && activePiece.owner === currentPlayer}
 			on:click={() => togglePiece(piece)}
-			disabled={pieceCounts[piece.name] >= piece.count}
+			disabled={pieceCounts[currentPlayer][piece.name] >= piece.count}
 		>
-			{piece.name} ({piece.count - pieceCounts[piece.name]})
+			{piece.name} ({piece.count - pieceCounts[currentPlayer][piece.name]})
 		</button>
 	{/each}
 
@@ -138,6 +174,11 @@
 		<button on:click={() => rotatePiece('clockwise')}>⟳</button>
 		<button on:click={() => rotatePiece('counterclockwise')}>⟲</button>
 	{/if}
+</div>
+
+<div class="scores">
+	<p>Player 1 Score: {scores.player1}</p>
+	<p>Player 2 Score: {scores.player2}</p>
 </div>
 
 <style>
@@ -162,13 +203,23 @@
 		background-color: lightgray;
 	}
 	.cell.shaded {
-		background-color: lightblue;
+		background-color: rgba(173, 216, 230, 0.5);
+	}
+	.cell.shaded.player1 {
+		background-color: rgba(144, 238, 144, 0.5);
+	}
+	.cell.shaded.player2 {
+		background-color: rgba(255, 182, 193, 0.5);
 	}
 	.cell.hover {
-		background-color: yellow;
+		background-color: yellow !important; /* Ensure hover color overrides others */
 	}
-	.cell:not(.default):not(.shaded) {
-		background-color: lightcoral;
+
+	.cell.player1 {
+		background-color: lightgreen;
+	}
+	.cell.player2 {
+		background-color: lightpink;
 	}
 	.controls {
 		display: flex;
@@ -176,5 +227,8 @@
 	}
 	.button.active {
 		background-color: lightcoral;
+	}
+	.scores {
+		margin-top: 16px;
 	}
 </style>
