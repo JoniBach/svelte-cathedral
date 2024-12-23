@@ -64,6 +64,7 @@
 		calculateShading();
 		calculateScores();
 		switchTurn();
+		activePiece = null;
 	};
 
 	const switchTurn = () => {
@@ -176,11 +177,6 @@
 	{/if}
 </div>
 
-<div class="scores">
-	<p>Player 1 Score: {scores.player1}</p>
-	<p>Player 2 Score: {scores.player2}</p>
-</div>
-
 <style>
 	.grid {
 		display: grid;
@@ -212,7 +208,7 @@
 		background-color: rgba(255, 182, 193, 0.5);
 	}
 	.cell.hover {
-		background-color: yellow !important; /* Ensure hover color overrides others */
+		background-color: yellow;
 	}
 
 	.cell.player1 {
