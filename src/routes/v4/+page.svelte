@@ -6,6 +6,7 @@
 	let grid = [];
 	const rows = 12,
 		columns = 12;
+	let perimeter = [];
 
 	let activePiece = null;
 	let pieceCounts = { player1: {}, player2: {} };
@@ -202,9 +203,26 @@
 		});
 	};
 
+	const calculatePerimiter = () => {
+		const perimeterCells = [];
+
+		for (let i = 0; i < rows; i++) {
+			if (i === 0 || i === rows - 1) {
+				for (let j = 0; j < columns; j++) {
+					perimeterCells.push([i, j]);
+				}
+			} else {
+				perimeterCells.push([i, 0]);
+				perimeterCells.push([i, columns - 1]);
+			}
+		}
+
+		return perimeterCells;
+	};
+
 	onMount(() => {
 		initGrid();
-		calculateShading();
+		perimeter = calculatePerimiter();
 	});
 </script>
 
