@@ -28,6 +28,26 @@
 		});
 	};
 
+	// Handle hover state
+	const handleMouseEnter = (cellIndex) => {
+		grid = grid.map((cell, index) => {
+			if (index === cellIndex) {
+				return { ...cell, hover: true };
+			}
+			return cell;
+		});
+	};
+
+	const handleMouseLeave = (cellIndex) => {
+		grid = grid.map((cell, index) => {
+			if (index === cellIndex) {
+				const { hover, ...rest } = cell; // Remove hover state
+				return rest;
+			}
+			return cell;
+		});
+	};
+
 	// Flood-fill to calculate and visually mark the shaded area
 	const calculateAndShadeArea = () => {
 		const grid2D = Array.from({ length: rows }, (_, i) =>
@@ -108,26 +128,30 @@
 			class="cell"
 			title={`Cell: ${cell.cell[0]}, ${cell.cell[1]}`}
 			on:click={() => activateCell(index)}
-			style="
-				background-color: 
-					{cell.id === 'active' ? 'lightgreen' : cell.id === 'shaded' ? 'lightblue' : 'lightgray'};
-			"
+			on:mouseenter={() => handleMouseEnter(index)}
+			on:mouseleave={() => handleMouseLeave(index)}
+			style="background-color: 
+					{cell.hover
+				? 'yellow'
+				: cell.id === 'active'
+					? 'lightgreen'
+					: cell.id === 'shaded'
+						? 'lightblue'
+						: 'lightgray'};"
 		>
 			{cell.cell[0]},{cell.cell[1]}
 		</div>
 	{/each}
 </div>
 
-<button on:click={calculateAndShadeArea}> Calculate and Shade Inside Area </button>
-
 <style>
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(10, 1fr);
-		width: 100%;
-		height: 100%;
-		max-width: 100vh;
-		max-height: 100vw;
+		width: 90%;
+		height: 90%;
+		max-width: 90vh;
+		max-height: 90vw;
 	}
 	.cell {
 		border: 1px solid black;
