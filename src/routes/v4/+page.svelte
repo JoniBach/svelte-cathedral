@@ -6,6 +6,9 @@
 	const columns = 10;
 	const rows = 10;
 
+	// Track how many times each piece is placed
+	let pieceCounts = Object.fromEntries(PIECES.map((piece) => [piece.name, 0]));
+
 	// Initialize the grid
 	const handleGrid = () => {
 		const defaultCell = { cell: [0, 0], id: 'default' };
@@ -23,7 +26,15 @@
 	const activateCells = (baseIndex) => {
 		if (!activePiece) return;
 
+		// Check if the piece has reached its placement limit
+		if (pieceCounts[activePiece.name] >= activePiece.count) {
+			alert(`${activePiece.name} has reached its placement limit.`);
+			return;
+		}
+
 		const [baseRow, baseCol] = grid[baseIndex].cell;
+
+		let placed = false;
 
 		grid = grid.map((cell) => {
 			const [row, col] = cell.cell;
@@ -34,12 +45,20 @@
 					(pieceCell) => pieceCell.cell[0] === row - baseRow && pieceCell.cell[1] === col - baseCol
 				)
 			) {
-				return { ...cell, id: cell.id === activePiece.name ? 'default' : activePiece.name };
+				if (cell.id === 'default') {
+					placed = true; // Mark that placement occurred
+					return { ...cell, id: activePiece.name };
+				}
 			}
 			return cell;
 		});
 
-		calculateAndShadeArea(); // Recalculate the shaded area
+		if (placed) {
+			pieceCounts[activePiece.name]++; // Increment placement count
+			calculateAndShadeArea(); // Recalculate the shaded area
+		} else {
+			alert(`Cannot place ${activePiece.name} here.`);
+		}
 	};
 
 	// Handle hover state for a group of cells
@@ -180,8 +199,12 @@
 	{#each PIECES as piece}
 		<button
 			class={activePiece?.name === piece.name ? 'active' : ''}
-			on:click={() => togglePiece(piece)}>{piece.name}</button
+			on:click={() => togglePiece(piece)}
+			disabled={pieceCounts[piece.name] >= piece.count}
 		>
+			{piece.count - pieceCounts[piece.name]}
+			{piece.name}
+		</button>
 	{/each}
 </div>
 
