@@ -65,6 +65,8 @@ export const PIECE = {
 
 export let PIECES = Object.keys(PIECE).map((key) => ({
 	name: key,
-	cells: PIECE[key].map((cell) => ({ cell, id: key }))
+	cells: PIECE[key].map((cell) => ({ cell, id: key })),
+	count: ['Tavern', 'Stable', 'Inn'].includes(key) ? 2 : 1
 }));
+
 export default PIECES;

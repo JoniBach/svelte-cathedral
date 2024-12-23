@@ -19,29 +19,53 @@
 		grid = newGrid;
 	};
 
-	// Toggle cell as part of the perimeter
-	const activateCell = (cellIndex) => {
-		grid = grid.map((cell, index) => {
-			if (index === cellIndex) {
-				return { ...cell, id: cell.id === 'active' ? 'default' : 'active' };
+	// Toggle cells based on the active piece
+	const activateCells = (baseIndex) => {
+		if (!activePiece) return;
+
+		const [baseRow, baseCol] = grid[baseIndex].cell;
+
+		grid = grid.map((cell) => {
+			const [row, col] = cell.cell;
+
+			// Check if the cell falls within the active piece's template
+			if (
+				activePiece.cells.some(
+					(pieceCell) => pieceCell.cell[0] === row - baseRow && pieceCell.cell[1] === col - baseCol
+				)
+			) {
+				return { ...cell, id: cell.id === activePiece.name ? 'default' : activePiece.name };
 			}
 			return cell;
 		});
+
+		calculateAndShadeArea(); // Recalculate the shaded area
 	};
 
-	// Handle hover state
-	const handleMouseEnter = (cellIndex) => {
-		grid = grid.map((cell, index) => {
-			if (index === cellIndex) {
+	// Handle hover state for a group of cells
+	const handleMouseEnter = (baseIndex) => {
+		if (!activePiece) return;
+
+		const [baseRow, baseCol] = grid[baseIndex].cell;
+
+		grid = grid.map((cell) => {
+			const [row, col] = cell.cell;
+
+			// Check if the cell falls within the active piece's template
+			if (
+				activePiece.cells.some(
+					(pieceCell) => pieceCell.cell[0] === row - baseRow && pieceCell.cell[1] === col - baseCol
+				)
+			) {
 				return { ...cell, hover: true };
 			}
 			return cell;
 		});
 	};
 
-	const handleMouseLeave = (cellIndex) => {
-		grid = grid.map((cell, index) => {
-			if (index === cellIndex) {
+	const handleMouseLeave = () => {
+		grid = grid.map((cell) => {
+			if (cell.hover) {
 				const { hover, ...rest } = cell; // Remove hover state
 				return rest;
 			}
@@ -61,7 +85,7 @@
 
 		// Determine if a cell is on the boundary (either "active" or out of bounds)
 		const isBoundary = (x, y) => {
-			return x < 0 || x >= rows || y < 0 || y >= columns || grid2D[x][y].id === 'active';
+			return x < 0 || x >= rows || y < 0 || y >= columns || grid2D[x][y].id !== 'default';
 		};
 
 		// Flood-fill algorithm considering corner neighbors
@@ -72,22 +96,23 @@
 				y < 0 ||
 				y >= columns || // Out of bounds
 				visited[x][y] || // Already visited
-				grid2D[x][y].id === 'active' // Boundary cell
+				grid2D[x][y].id !== 'default' // Non-default cell
 			) {
 				return;
 			}
 
 			visited[x][y] = true;
 
-			// Explore 8 neighbors (including diagonals)
+			// Explore neighbors (4 directions)
 			markOutside(x - 1, y); // Up
 			markOutside(x + 1, y); // Down
 			markOutside(x, y - 1); // Left
 			markOutside(x, y + 1); // Right
-			markOutside(x - 1, y - 1); // Top-left
-			markOutside(x - 1, y + 1); // Top-right
-			markOutside(x + 1, y - 1); // Bottom-left
-			markOutside(x + 1, y + 1); // Bottom-right
+			// Explore corner neighbors
+			markOutside(x - 1, y - 1); // Up-Left
+			markOutside(x - 1, y + 1); // Up-Right
+			markOutside(x + 1, y - 1); // Down-Left
+			markOutside(x + 1, y + 1); // Down-Right
 		};
 
 		// Start marking outside areas from edges
@@ -116,11 +141,6 @@
 		handleGrid();
 	});
 
-	$: {
-		if (grid.length) {
-			calculateAndShadeArea();
-		}
-	}
 	let activePiece = null;
 
 	const togglePiece = (piece) => {
@@ -137,9 +157,9 @@
 		<div
 			class="cell"
 			title={`Cell: ${cell.cell[0]}, ${cell.cell[1]}`}
-			on:click={() => activateCell(index)}
+			on:click={() => activateCells(index)}
 			on:mouseenter={() => handleMouseEnter(index)}
-			on:mouseleave={() => handleMouseLeave(index)}
+			on:mouseleave={() => handleMouseLeave()}
 			style="background-color: 
 					{cell.hover
 				? 'yellow'
@@ -147,7 +167,9 @@
 					? 'lightgreen'
 					: cell.id === 'shaded'
 						? 'lightblue'
-						: 'lightgray'};"
+						: cell.id !== 'default'
+							? 'lightcoral'
+							: 'lightgray'};"
 		>
 			{cell.cell[0]},{cell.cell[1]}
 		</div>
