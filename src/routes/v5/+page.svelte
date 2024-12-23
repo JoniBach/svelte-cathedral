@@ -5,6 +5,7 @@
 	let rows = 10;
 	let columns = 10;
 	let player = 1;
+	let turn = 1;
 
 	const initGrid = () => {
 		const defaultCell = (row, col) => ({
@@ -23,11 +24,34 @@
 		return cells;
 	};
 
-	const modifyCell = {
-		ownership: (id) =>
-			(grid = grid.map((cell) => (cell.id === id ? { ...cell, owner: player } : cell))),
-		occupation: (id) =>
-			(grid = grid.map((cell) => (cell.id === id ? { ...cell, occupied: true } : cell)))
+	const checkCellValidation = (cell) => [cell.owner === player || !cell.owner, !cell.occupied];
+
+	const validateCell = (cell) => checkCellValidation(cell).every(Boolean);
+
+	const getCell = (id) => grid.find((cell) => cell.id === id);
+
+	const getCells = (ids) => ids.map((id) => getCell(id));
+
+	const modifyCell = (selectedCell, selectedCells) => {
+		if (validateCell(selectedCell)) {
+			return {
+				ownership: selectedCells.map((existingCell) =>
+					existingCell.id === selectedCell.id ? { ...existingCell, owner: player } : existingCell
+				),
+				occupation: selectedCells.map((existingCell) =>
+					existingCell.id === selectedCell.id ? { ...existingCell, occupied: true } : existingCell
+				)
+			};
+		} else {
+			alert('error');
+		}
+	};
+
+	const modifyTurn = {
+		end: () => {
+			player === 1 ? (player = 2) : (player = 1);
+			turn++;
+		}
 	};
 
 	let grid = [];
@@ -36,9 +60,12 @@
 		grid = initGrid();
 	});
 
-	const cellClick = (id) => {
-		modifyCell.ownership(id);
-		modifyCell.occupation(id);
+	const cellClick = (cell) => {
+		let newGrid = grid;
+		newGrid = modifyCell(cell, newGrid).ownership;
+		newGrid = modifyCell(cell, newGrid).occupation;
+		grid = newGrid;
+		modifyTurn.end();
 	};
 
 	$: console.log('Initialized grid:', grid);
@@ -46,7 +73,7 @@
 
 <div class="grid" style="grid-template-columns: repeat({columns}, 1fr)">
 	{#each grid as cell}
-		<div class="cell player-{cell.owner}" on:click={() => cellClick(cell.id)}>
+		<div class="cell player-{cell.owner} occupied-{cell.occupied}" on:click={() => cellClick(cell)}>
 			{cell.id}
 		</div>
 	{/each}
@@ -69,7 +96,10 @@
 		cursor: pointer;
 		background-color: white;
 	}
-	.cell.player-1 {
-		background-color: aqua;
+	.cell.player-1.occupied-true {
+		background-color: lightgreen;
+	}
+	.cell.player-2.occupied-true {
+		background-color: lightcoral;
 	}
 </style>
