@@ -1,5 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
+	import { PIECES, PIECE } from '../pieces.js';
 
 	let grid = [];
 	const columns = 10;
@@ -120,6 +121,15 @@
 			calculateAndShadeArea();
 		}
 	}
+	let activePiece = null;
+
+	const togglePiece = (piece) => {
+		if (activePiece === piece) {
+			activePiece = null;
+		} else {
+			activePiece = piece;
+		}
+	};
 </script>
 
 <div class="grid">
@@ -144,7 +154,23 @@
 	{/each}
 </div>
 
+<div class="controls">
+	{#each PIECES as piece}
+		<button
+			class={activePiece?.name === piece.name ? 'active' : ''}
+			on:click={() => togglePiece(piece)}>{piece.name}</button
+		>
+	{/each}
+</div>
+
 <style>
+	.controls {
+		display: flex;
+		margin-top: 4px;
+	}
+	.active {
+		background-color: lightcoral;
+	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(10, 1fr);
