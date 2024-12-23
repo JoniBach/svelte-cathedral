@@ -30,8 +30,23 @@
 
 		const [baseRow, baseCol] = grid[baseIndex].cell;
 
-		let placed = false;
+		// Check if all cells for the piece are available
+		const canPlace = activePiece.cells.every((pieceCell) => {
+			const targetRow = baseRow + pieceCell.cell[0];
+			const targetCol = baseCol + pieceCell.cell[1];
+			const targetCell = grid.find(
+				(cell) => cell.cell[0] === targetRow && cell.cell[1] === targetCol
+			);
+			return targetCell && targetCell.id === 'default';
+		});
 
+		if (!canPlace) {
+			alert(`Cannot place ${activePiece.name} here due to overlap.`);
+			return;
+		}
+
+		// Place the piece
+		let placed = false;
 		grid = grid.map((cell) => {
 			const [row, col] = cell.cell;
 
@@ -51,8 +66,6 @@
 		if (placed) {
 			pieceCounts[activePiece.name]++;
 			calculateAndShadeArea();
-		} else {
-			alert(`Cannot place ${activePiece.name} here.`);
 		}
 	};
 
@@ -208,10 +221,8 @@
 	{/each}
 
 	{#if activePiece}
-		<div>
-			<button on:click={rotateClockwise}>Rotate Clockwise</button>
-			<button on:click={rotateCounterClockwise}>Rotate Counterclockwise</button>
-		</div>
+		<button on:click={rotateClockwise}> ⟳ </button>
+		<button on:click={rotateCounterClockwise}> ⟲ </button>
 	{/if}
 </div>
 
