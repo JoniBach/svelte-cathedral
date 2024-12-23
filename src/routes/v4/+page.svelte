@@ -1,208 +1,122 @@
 <script>
 	import { onMount } from 'svelte';
-	import { PIECES, PIECE } from '../pieces.js';
+	import { PIECES } from '../pieces.js';
 
 	let grid = [];
-	const columns = 10;
-	const rows = 10;
+	const rows = 10,
+		columns = 10;
 
+	// Track active piece and piece counts
+	let activePiece = null;
 	let pieceCounts = Object.fromEntries(PIECES.map((piece) => [piece.name, 0]));
 
-	const handleGrid = () => {
-		const defaultCell = { cell: [0, 0], id: 'default' };
+	// Initialize the grid
+	const initGrid = () =>
+		(grid = Array.from({ length: rows * columns }, (_, index) => ({
+			cell: [Math.floor(index / columns), index % columns],
+			id: 'default',
+			hover: false
+		})));
 
-		const newGrid = [];
-		for (let i = 0; i < columns; i++) {
-			for (let j = 0; j < rows; j++) {
-				newGrid.push({ ...defaultCell, cell: [i, j], id: 'default' });
-			}
-		}
-		grid = newGrid;
+	// Check if a cell is available
+	const isAvailable = ([row, col]) =>
+		grid.find((cell) => cell.cell[0] === row && cell.cell[1] === col)?.id === 'default';
+
+	// Update hover or occupied states
+	const updateGrid = (callback) => {
+		grid = grid.map((cell) => callback(cell));
 	};
 
 	const activateCells = (baseIndex) => {
 		if (!activePiece) return;
+		const pieceLimitReached = pieceCounts[activePiece.name] >= activePiece.count;
+		if (pieceLimitReached) return alert(`${activePiece.name} placement limit reached.`);
 
-		if (pieceCounts[activePiece.name] >= activePiece.count) {
-			alert(`${activePiece.name} has reached its placement limit.`);
-			return;
-		}
-
-		const [baseRow, baseCol] = grid[baseIndex].cell;
-
-		// Check if all cells for the piece are available
-		const canPlace = activePiece.cells.every((pieceCell) => {
-			const targetRow = baseRow + pieceCell.cell[0];
-			const targetCol = baseCol + pieceCell.cell[1];
-			const targetCell = grid.find(
-				(cell) => cell.cell[0] === targetRow && cell.cell[1] === targetCol
-			);
-			return targetCell && targetCell.id === 'default';
-		});
-
-		if (!canPlace) {
-			alert(`Cannot place ${activePiece.name} here due to overlap.`);
-			return;
-		}
-
-		// Place the piece
-		let placed = false;
-		grid = grid.map((cell) => {
-			const [row, col] = cell.cell;
-
-			if (
-				activePiece.cells.some(
-					(pieceCell) => pieceCell.cell[0] === row - baseRow && pieceCell.cell[1] === col - baseCol
-				)
-			) {
-				if (cell.id === 'default') {
-					placed = true;
-					return { ...cell, id: activePiece.name };
-				}
-			}
-			return cell;
-		});
-
-		if (placed) {
-			pieceCounts[activePiece.name]++;
-			calculateAndShadeArea();
-		}
-	};
-
-	const handleMouseEnter = (baseIndex) => {
-		if (!activePiece) return;
-
-		const [baseRow, baseCol] = grid[baseIndex].cell;
-
-		grid = grid.map((cell) => {
-			const [row, col] = cell.cell;
-
-			if (
-				activePiece.cells.some(
-					(pieceCell) => pieceCell.cell[0] === row - baseRow && pieceCell.cell[1] === col - baseCol
-				)
-			) {
-				return { ...cell, hover: true };
-			}
-			return cell;
-		});
-	};
-
-	const handleMouseLeave = () => {
-		grid = grid.map((cell) => {
-			if (cell.hover) {
-				const { hover, ...rest } = cell;
-				return rest;
-			}
-			return cell;
-		});
-	};
-
-	const calculateAndShadeArea = () => {
-		const grid2D = Array.from({ length: rows }, (_, i) =>
-			grid.slice(i * columns, (i + 1) * columns)
+		const baseCell = grid[baseIndex].cell;
+		const canPlace = activePiece.cells.every(({ cell }) =>
+			isAvailable([baseCell[0] + cell[0], baseCell[1] + cell[1]])
 		);
 
+		if (!canPlace) return alert(`Cannot place ${activePiece.name} due to overlap.`);
+
+		pieceCounts[activePiece.name]++;
+		updateGrid((cell) => {
+			const isOccupied = activePiece.cells.some(
+				(p) => p.cell[0] + baseCell[0] === cell.cell[0] && p.cell[1] + baseCell[1] === cell.cell[1]
+			);
+			return isOccupied ? { ...cell, id: activePiece.name } : cell;
+		});
+		calculateShading();
+	};
+
+	const calculateShading = () => {
 		const visited = Array(rows)
-			.fill(null)
+			.fill()
 			.map(() => Array(columns).fill(false));
-
-		const isBoundary = (x, y) => {
-			return x < 0 || x >= rows || y < 0 || y >= columns || grid2D[x][y].id !== 'default';
-		};
-
 		const markOutside = (x, y) => {
-			if (
-				x < 0 ||
-				x >= rows ||
-				y < 0 ||
-				y >= columns ||
-				visited[x][y] ||
-				grid2D[x][y].id !== 'default'
-			) {
+			if (x < 0 || y < 0 || x >= rows || y >= columns || visited[x][y] || !isAvailable([x, y]))
 				return;
-			}
-
 			visited[x][y] = true;
-
-			markOutside(x - 1, y);
-			markOutside(x + 1, y);
-			markOutside(x, y - 1);
-			markOutside(x, y + 1);
-			markOutside(x - 1, y - 1);
-			markOutside(x - 1, y + 1);
-			markOutside(x + 1, y - 1);
-			markOutside(x + 1, y + 1);
+			[
+				[-1, 0],
+				[1, 0],
+				[0, -1],
+				[0, 1],
+				[-1, -1],
+				[-1, 1],
+				[1, -1],
+				[1, 1]
+			].forEach(([dx, dy]) => markOutside(x + dx, y + dy));
 		};
 
-		for (let i = 0; i < rows; i++) {
-			for (let j = 0; j < columns; j++) {
-				if ((i === 0 || j === 0 || i === rows - 1 || j === columns - 1) && !visited[i][j]) {
-					markOutside(i, j);
-				}
-			}
-		}
+		[...Array(rows).keys()].forEach((i) => {
+			markOutside(i, 0);
+			markOutside(i, columns - 1);
+		});
+		[...Array(columns).keys()].forEach((j) => {
+			markOutside(0, j);
+			markOutside(rows - 1, j);
+		});
 
-		for (let i = 0; i < rows; i++) {
-			for (let j = 0; j < columns; j++) {
-				if (!visited[i][j] && grid2D[i][j].id === 'default') {
-					grid2D[i][j].id = 'shaded';
-				}
-			}
-		}
-
-		grid = grid2D.flat();
+		updateGrid((cell) => {
+			const [row, col] = cell.cell;
+			return !visited[row][col] && cell.id === 'default' ? { ...cell, id: 'shaded' } : cell;
+		});
 	};
 
-	const rotateClockwise = () => {
+	const rotatePiece = (direction) => {
 		if (!activePiece) return;
 		activePiece.cells = activePiece.cells.map(({ cell }) => ({
-			cell: [cell[1], -cell[0]],
+			cell: direction === 'clockwise' ? [cell[1], -cell[0]] : [-cell[1], cell[0]],
 			id: activePiece.name
 		}));
 	};
-
-	const rotateCounterClockwise = () => {
-		if (!activePiece) return;
-		activePiece.cells = activePiece.cells.map(({ cell }) => ({
-			cell: [-cell[1], cell[0]],
-			id: activePiece.name
-		}));
-	};
-
-	onMount(() => {
-		handleGrid();
-	});
-
-	let activePiece = null;
 
 	const togglePiece = (piece) => {
-		if (activePiece === piece) {
-			activePiece = null;
-		} else {
-			activePiece = piece;
-		}
+		activePiece = activePiece === piece ? null : piece;
 	};
+
+	const handleMouse = (baseIndex, hover) => {
+		if (!activePiece) return;
+		const baseCell = grid[baseIndex].cell;
+		updateGrid((cell) => {
+			const isHovered = activePiece.cells.some(
+				(p) => p.cell[0] + baseCell[0] === cell.cell[0] && p.cell[1] + baseCell[1] === cell.cell[1]
+			);
+			return isHovered ? { ...cell, hover } : { ...cell, hover: false };
+		});
+	};
+
+	onMount(initGrid);
 </script>
 
 <div class="grid">
 	{#each grid as cell, index}
 		<div
-			class="cell"
-			title={`Cell: ${cell.cell[0]}, ${cell.cell[1]}`}
 			on:click={() => activateCells(index)}
-			on:mouseenter={() => handleMouseEnter(index)}
-			on:mouseleave={() => handleMouseLeave()}
-			style="background-color: 
-					{cell.hover
-				? 'yellow'
-				: cell.id === 'active'
-					? 'lightgreen'
-					: cell.id === 'shaded'
-						? 'lightblue'
-						: cell.id !== 'default'
-							? 'lightcoral'
-							: 'lightgray'};"
+			on:mouseenter={() => handleMouse(index, true)}
+			on:mouseleave={() => handleMouse(index, false)}
+			class="cell {cell.id} {cell.hover ? 'hover' : ''}"
 		>
 			{cell.cell[0]},{cell.cell[1]}
 		</div>
@@ -212,7 +126,7 @@
 <div class="controls">
 	{#each PIECES as piece}
 		<button
-			class={activePiece?.name === piece.name ? 'active' : ''}
+			class:active={activePiece?.name === piece.name}
 			on:click={() => togglePiece(piece)}
 			disabled={pieceCounts[piece.name] >= piece.count}
 		>
@@ -221,19 +135,12 @@
 	{/each}
 
 	{#if activePiece}
-		<button on:click={rotateClockwise}> ⟳ </button>
-		<button on:click={rotateCounterClockwise}> ⟲ </button>
+		<button on:click={() => rotatePiece('clockwise')}>⟳</button>
+		<button on:click={() => rotatePiece('counterclockwise')}>⟲</button>
 	{/if}
 </div>
 
 <style>
-	.controls {
-		display: flex;
-		margin-top: 4px;
-	}
-	.active {
-		background-color: lightcoral;
-	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(10, 1fr);
@@ -243,10 +150,33 @@
 		max-height: 90vw;
 	}
 	.cell {
-		border: 1px solid black;
+		border-bottom: 1px solid black;
+		border-right: 1px solid black;
+		border-left: none;
+		border-top: none;
 		display: flex;
 		justify-content: center;
 		align-items: center;
 		cursor: pointer;
+		background-color: lightgray;
+	}
+	.cell.default {
+		background-color: lightgray;
+	}
+	.cell.shaded {
+		background-color: lightblue;
+	}
+	.cell.hover {
+		background-color: yellow;
+	}
+	.cell:not(.default):not(.shaded) {
+		background-color: lightcoral;
+	}
+	.controls {
+		display: flex;
+		margin-top: 8px;
+	}
+	.button.active {
+		background-color: lightcoral;
 	}
 </style>
