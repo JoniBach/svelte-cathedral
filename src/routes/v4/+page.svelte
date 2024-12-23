@@ -4,8 +4,8 @@
 
 	// Game variables
 	let grid = [];
-	const rows = 10,
-		columns = 10;
+	const rows = 12,
+		columns = 12;
 
 	let activePiece = null;
 	let pieceCounts = { player1: {}, player2: {} };
@@ -208,7 +208,7 @@
 	});
 </script>
 
-<div class="grid">
+<div class="grid" style="grid-template-columns: repeat({columns}, 1fr);">
 	{#each grid as cell, index}
 		<div
 			on:click={() => activateCells(index)}
@@ -241,7 +241,7 @@
 <style>
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(10, 1fr);
+
 		width: 90%;
 		height: 90%;
 		max-width: 90vh;
