@@ -6,10 +6,8 @@
 	const columns = 10;
 	const rows = 10;
 
-	// Track how many times each piece is placed
 	let pieceCounts = Object.fromEntries(PIECES.map((piece) => [piece.name, 0]));
 
-	// Initialize the grid
 	const handleGrid = () => {
 		const defaultCell = { cell: [0, 0], id: 'default' };
 
@@ -22,11 +20,9 @@
 		grid = newGrid;
 	};
 
-	// Toggle cells based on the active piece
 	const activateCells = (baseIndex) => {
 		if (!activePiece) return;
 
-		// Check if the piece has reached its placement limit
 		if (pieceCounts[activePiece.name] >= activePiece.count) {
 			alert(`${activePiece.name} has reached its placement limit.`);
 			return;
@@ -39,14 +35,13 @@
 		grid = grid.map((cell) => {
 			const [row, col] = cell.cell;
 
-			// Check if the cell falls within the active piece's template
 			if (
 				activePiece.cells.some(
 					(pieceCell) => pieceCell.cell[0] === row - baseRow && pieceCell.cell[1] === col - baseCol
 				)
 			) {
 				if (cell.id === 'default') {
-					placed = true; // Mark that placement occurred
+					placed = true;
 					return { ...cell, id: activePiece.name };
 				}
 			}
@@ -54,14 +49,13 @@
 		});
 
 		if (placed) {
-			pieceCounts[activePiece.name]++; // Increment placement count
-			calculateAndShadeArea(); // Recalculate the shaded area
+			pieceCounts[activePiece.name]++;
+			calculateAndShadeArea();
 		} else {
 			alert(`Cannot place ${activePiece.name} here.`);
 		}
 	};
 
-	// Handle hover state for a group of cells
 	const handleMouseEnter = (baseIndex) => {
 		if (!activePiece) return;
 
@@ -70,7 +64,6 @@
 		grid = grid.map((cell) => {
 			const [row, col] = cell.cell;
 
-			// Check if the cell falls within the active piece's template
 			if (
 				activePiece.cells.some(
 					(pieceCell) => pieceCell.cell[0] === row - baseRow && pieceCell.cell[1] === col - baseCol
@@ -85,14 +78,13 @@
 	const handleMouseLeave = () => {
 		grid = grid.map((cell) => {
 			if (cell.hover) {
-				const { hover, ...rest } = cell; // Remove hover state
+				const { hover, ...rest } = cell;
 				return rest;
 			}
 			return cell;
 		});
 	};
 
-	// Flood-fill to calculate and visually mark the shaded area
 	const calculateAndShadeArea = () => {
 		const grid2D = Array.from({ length: rows }, (_, i) =>
 			grid.slice(i * columns, (i + 1) * columns)
@@ -102,39 +94,34 @@
 			.fill(null)
 			.map(() => Array(columns).fill(false));
 
-		// Determine if a cell is on the boundary (either "active" or out of bounds)
 		const isBoundary = (x, y) => {
 			return x < 0 || x >= rows || y < 0 || y >= columns || grid2D[x][y].id !== 'default';
 		};
 
-		// Flood-fill algorithm considering corner neighbors
 		const markOutside = (x, y) => {
 			if (
 				x < 0 ||
 				x >= rows ||
 				y < 0 ||
-				y >= columns || // Out of bounds
-				visited[x][y] || // Already visited
-				grid2D[x][y].id !== 'default' // Non-default cell
+				y >= columns ||
+				visited[x][y] ||
+				grid2D[x][y].id !== 'default'
 			) {
 				return;
 			}
 
 			visited[x][y] = true;
 
-			// Explore neighbors (4 directions)
-			markOutside(x - 1, y); // Up
-			markOutside(x + 1, y); // Down
-			markOutside(x, y - 1); // Left
-			markOutside(x, y + 1); // Right
-			// Explore corner neighbors
-			markOutside(x - 1, y - 1); // Up-Left
-			markOutside(x - 1, y + 1); // Up-Right
-			markOutside(x + 1, y - 1); // Down-Left
-			markOutside(x + 1, y + 1); // Down-Right
+			markOutside(x - 1, y);
+			markOutside(x + 1, y);
+			markOutside(x, y - 1);
+			markOutside(x, y + 1);
+			markOutside(x - 1, y - 1);
+			markOutside(x - 1, y + 1);
+			markOutside(x + 1, y - 1);
+			markOutside(x + 1, y + 1);
 		};
 
-		// Start marking outside areas from edges
 		for (let i = 0; i < rows; i++) {
 			for (let j = 0; j < columns; j++) {
 				if ((i === 0 || j === 0 || i === rows - 1 || j === columns - 1) && !visited[i][j]) {
@@ -143,7 +130,6 @@
 			}
 		}
 
-		// Mark the inside area as "shaded"
 		for (let i = 0; i < rows; i++) {
 			for (let j = 0; j < columns; j++) {
 				if (!visited[i][j] && grid2D[i][j].id === 'default') {
@@ -152,8 +138,23 @@
 			}
 		}
 
-		// Flatten the 2D grid back to a 1D array
 		grid = grid2D.flat();
+	};
+
+	const rotateClockwise = () => {
+		if (!activePiece) return;
+		activePiece.cells = activePiece.cells.map(({ cell }) => ({
+			cell: [cell[1], -cell[0]],
+			id: activePiece.name
+		}));
+	};
+
+	const rotateCounterClockwise = () => {
+		if (!activePiece) return;
+		activePiece.cells = activePiece.cells.map(({ cell }) => ({
+			cell: [-cell[1], cell[0]],
+			id: activePiece.name
+		}));
 	};
 
 	onMount(() => {
@@ -202,10 +203,16 @@
 			on:click={() => togglePiece(piece)}
 			disabled={pieceCounts[piece.name] >= piece.count}
 		>
-			{piece.count - pieceCounts[piece.name]}
-			{piece.name}
+			{piece.name} ({piece.count - pieceCounts[piece.name]})
 		</button>
 	{/each}
+
+	{#if activePiece}
+		<div>
+			<button on:click={rotateClockwise}>Rotate Clockwise</button>
+			<button on:click={rotateCounterClockwise}>Rotate Counterclockwise</button>
+		</div>
+	{/if}
 </div>
 
 <style>
