@@ -51,9 +51,11 @@
 		ownership: (selectedCells, grid) => {
 			return grid.map((existingCell) => {
 				const match = selectedCells.find((cell) => cell.id === existingCell.id);
-				return match && !existingCell.occupied ? { ...existingCell, owner: player } : existingCell;
+				// Update ownership regardless of occupied state for selected cells
+				return match ? { ...existingCell, owner: player } : existingCell;
 			});
 		},
+
 		occupation: (selectedCells, grid) => {
 			return grid.map((existingCell) => {
 				const match = selectedCells.find((cell) => cell.id === existingCell.id);
@@ -174,6 +176,29 @@
 		return Array.from(encapsulatedCells).map((id) => getCell(id));
 	};
 
+	const getNeighbouringBoundryCells = (cell) => {
+		const [row, col] = cell.id.split('-').map(Number);
+		const directions = [
+			[-1, 0],
+			[1, 0],
+			[0, -1],
+			[0, 1]
+		];
+
+		return directions
+			.map(([dRow, dCol]) => {
+				const newRow = row + dRow;
+				const newCol = col + dCol;
+				if (newRow >= 0 && newRow < rows && newCol >= 0 && newCol < columns) {
+					return `${newRow}-${newCol}`;
+				}
+				return null; // Filter out invalid IDs
+			})
+			.filter(Boolean) // Remove null values
+			.map((id) => getCell(id))
+			.filter((cell) => cell && cell.boundry); // Ensure it's a valid boundary cell
+	};
+
 	const cellClick = (cell) => {
 		if (!validateCell(cell)) {
 			modifyTurn.end(false);
@@ -181,14 +206,27 @@
 			return;
 		}
 
-		let newGrid = grid;
+		let newGrid = [...grid];
+
+		// Update ownership and occupation for the clicked cell
 		newGrid = modifyCells.ownership([cell], newGrid);
 		newGrid = modifyCells.occupation([cell], newGrid);
-		let fillCells = getCellsToFill(newGrid);
+
+		// Update ownership for any filled cells
+		const fillCells = getCellsToFill(newGrid);
 		newGrid = modifyCells.ownership(fillCells, newGrid);
 
+		// Update ownership for neighboring boundary cells
+		const boundaryCells = getNeighbouringBoundryCells(cell);
+		newGrid = modifyCells.ownership(boundaryCells, newGrid);
+
+		// Save updated grid
 		grid = newGrid;
+
+		// End turn after successful update
 		modifyTurn.end(true);
+
+		console.log('Updated grid:', grid); // Debugging
 	};
 
 	$: console.log('Initialized grid:', grid);
@@ -197,7 +235,7 @@
 <div class="grid" style="grid-template-columns: repeat({columns}, 1fr)">
 	{#each grid as cell}
 		<div
-			class="cell player-{cell.owner} occupied-{cell.occupied} boundry-{cell.boundry}"
+			class="cell player-{cell.owner || 'none'} occupied-{cell.occupied} boundry-{cell.boundry}"
 			on:click={() => cellClick(cell)}
 		>
 			{cell.id}
@@ -234,7 +272,13 @@
 	.cell.player-2.occupied-false {
 		background-color: lightcoral;
 	}
-	.cell.boundry-true {
+	.cell.boundry-true.occupied-true.player-none {
 		background-color: lightgray;
+	}
+	.cell.boundry-true.occupied-true.player-1 {
+		background-color: darkgreen;
+	}
+	.cell.boundry-true.occupied-true.player-2 {
+		background-color: darkorange;
 	}
 </style>
