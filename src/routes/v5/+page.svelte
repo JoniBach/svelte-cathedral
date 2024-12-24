@@ -2,8 +2,8 @@
 	import { onMount } from 'svelte';
 	import { PIECES, CATHEDRAL } from '../pieces.js';
 
-	let rows = 10;
-	let columns = 10;
+	let rows = 12;
+	let columns = 12;
 	let player = 1;
 	let turn = 1;
 
@@ -12,7 +12,8 @@
 			id: `${row}-${col}`,
 			status: null,
 			owner: null,
-			occupied: false
+			occupied: false,
+			boundry: false
 		});
 
 		const cells = Array.from({ length: rows * columns }, (_, index) => {
@@ -32,6 +33,20 @@
 
 	const getCells = (ids) => ids.map((id) => getCell(id));
 
+	const getOuterCells = (cells) => {
+		return cells.filter((cell) => {
+			const [row, col] = cell.id.split('-').map(Number);
+
+			// Check if the cell is on the outer boundary
+			return (
+				row === 0 || // Top row
+				row === rows - 1 || // Bottom row
+				col === 0 || // Leftmost column
+				col === columns - 1 // Rightmost column
+			);
+		});
+	};
+
 	const modifyCells = {
 		ownership: (selectedCells, grid) => {
 			return grid.map((existingCell) => {
@@ -43,6 +58,12 @@
 			return grid.map((existingCell) => {
 				const match = selectedCells.find((cell) => cell.id === existingCell.id);
 				return match ? { ...existingCell, occupied: true } : existingCell;
+			});
+		},
+		boundry: (selectedCells, grid) => {
+			return grid.map((existingCell) => {
+				const match = selectedCells.find((cell) => cell.id === existingCell.id);
+				return match ? { ...existingCell, boundry: true, occupied: true } : existingCell;
 			});
 		}
 	};
@@ -60,6 +81,9 @@
 
 	onMount(() => {
 		grid = initGrid();
+		let outerCells = getOuterCells(grid);
+		grid = modifyCells.boundry(outerCells, grid);
+		console.log('Outer cells:', outerCells);
 	});
 
 	const getCellsToFill = (grid) => {
@@ -162,6 +186,7 @@
 		newGrid = modifyCells.occupation([cell], newGrid);
 		let fillCells = getCellsToFill(newGrid);
 		newGrid = modifyCells.ownership(fillCells, newGrid);
+
 		grid = newGrid;
 		modifyTurn.end(true);
 	};
@@ -171,7 +196,10 @@
 
 <div class="grid" style="grid-template-columns: repeat({columns}, 1fr)">
 	{#each grid as cell}
-		<div class="cell player-{cell.owner} occupied-{cell.occupied}" on:click={() => cellClick(cell)}>
+		<div
+			class="cell player-{cell.owner} occupied-{cell.occupied} boundry-{cell.boundry}"
+			on:click={() => cellClick(cell)}
+		>
 			{cell.id}
 		</div>
 	{/each}
@@ -205,5 +233,8 @@
 	}
 	.cell.player-2.occupied-false {
 		background-color: lightcoral;
+	}
+	.cell.boundry-true {
+		background-color: lightgray;
 	}
 </style>
