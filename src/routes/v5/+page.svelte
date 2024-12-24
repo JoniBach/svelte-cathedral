@@ -32,25 +32,27 @@
 
 	const getCells = (ids) => ids.map((id) => getCell(id));
 
-	const modifyCell = (selectedCell, selectedCells) => {
-		if (validateCell(selectedCell)) {
-			return {
-				ownership: selectedCells.map((existingCell) =>
-					existingCell.id === selectedCell.id ? { ...existingCell, owner: player } : existingCell
-				),
-				occupation: selectedCells.map((existingCell) =>
-					existingCell.id === selectedCell.id ? { ...existingCell, occupied: true } : existingCell
-				)
-			};
-		} else {
-			alert('error');
+	const modifyCells = {
+		ownership: (selectedCells, grid) => {
+			return grid.map((existingCell) => {
+				const match = selectedCells.find((cell) => cell.id === existingCell.id);
+				return match && !existingCell.occupied ? { ...existingCell, owner: player } : existingCell;
+			});
+		},
+		occupation: (selectedCells, grid) => {
+			return grid.map((existingCell) => {
+				const match = selectedCells.find((cell) => cell.id === existingCell.id);
+				return match ? { ...existingCell, occupied: true } : existingCell;
+			});
 		}
 	};
 
 	const modifyTurn = {
-		end: () => {
-			player === 1 ? (player = 2) : (player = 1);
-			turn++;
+		end: (validAction) => {
+			if (validAction) {
+				player === 1 ? (player = 2) : (player = 1);
+				turn++;
+			}
 		}
 	};
 
@@ -60,12 +62,108 @@
 		grid = initGrid();
 	});
 
+	const getCellsToFill = (grid) => {
+		// Create a 2D grid representation for easier adjacency checks
+		const grid2D = Array.from({ length: rows }, (_, row) =>
+			grid.slice(row * columns, row * columns + columns)
+		);
+
+		const visited = new Set();
+		const encapsulatedCells = new Set();
+
+		// Direction vectors for adjacent cells (orthogonal and diagonal)
+		const directions = [
+			[-1, 0],
+			[1, 0],
+			[0, -1],
+			[0, 1],
+			[-1, -1],
+			[-1, 1],
+			[1, -1],
+			[1, 1]
+		];
+
+		const isInBounds = (row, col) => row >= 0 && row < rows && col >= 0 && col < columns;
+
+		const floodFill = (row, col, playerOwner) => {
+			const stack = [[row, col]];
+			let boundaryReached = false;
+			const region = [];
+
+			while (stack.length > 0) {
+				const [currentRow, currentCol] = stack.pop();
+				const cellId = `${currentRow}-${currentCol}`;
+
+				if (visited.has(cellId)) continue;
+
+				visited.add(cellId);
+				region.push(cellId);
+
+				// Check if cell is at the boundary
+				if (
+					currentRow === 0 ||
+					currentRow === rows - 1 ||
+					currentCol === 0 ||
+					currentCol === columns - 1
+				) {
+					boundaryReached = true;
+				}
+
+				// Check neighbors
+				for (const [dRow, dCol] of directions) {
+					const newRow = currentRow + dRow;
+					const newCol = currentCol + dCol;
+
+					if (isInBounds(newRow, newCol)) {
+						const neighbor = grid2D[newRow][newCol];
+						const neighborId = `${newRow}-${newCol}`;
+
+						// Add to stack if not visited and not occupied by the player
+						if (!visited.has(neighborId) && neighbor.owner !== playerOwner) {
+							stack.push([newRow, newCol]);
+						}
+					}
+				}
+			}
+
+			return { region, boundaryReached };
+		};
+
+		// Iterate over the grid and find encapsulated regions
+		for (let row = 0; row < rows; row++) {
+			for (let col = 0; col < columns; col++) {
+				const currentCell = grid2D[row][col];
+				const cellId = `${row}-${col}`;
+
+				if (!visited.has(cellId) && !currentCell.occupied) {
+					const { region, boundaryReached } = floodFill(row, col, player);
+
+					if (!boundaryReached) {
+						// Add region to encapsulated cells if it's fully surrounded
+						region.forEach((cell) => encapsulatedCells.add(cell));
+					}
+				}
+			}
+		}
+
+		// Return encapsulated cells as an array
+		return Array.from(encapsulatedCells).map((id) => getCell(id));
+	};
+
 	const cellClick = (cell) => {
+		if (!validateCell(cell)) {
+			modifyTurn.end(false);
+			alert('Invalid cell selection');
+			return;
+		}
+
 		let newGrid = grid;
-		newGrid = modifyCell(cell, newGrid).ownership;
-		newGrid = modifyCell(cell, newGrid).occupation;
+		newGrid = modifyCells.ownership([cell], newGrid);
+		newGrid = modifyCells.occupation([cell], newGrid);
+		let fillCells = getCellsToFill(newGrid);
+		newGrid = modifyCells.ownership(fillCells, newGrid);
 		grid = newGrid;
-		modifyTurn.end();
+		modifyTurn.end(true);
 	};
 
 	$: console.log('Initialized grid:', grid);
@@ -97,9 +195,15 @@
 		background-color: white;
 	}
 	.cell.player-1.occupied-true {
-		background-color: lightgreen;
+		background-color: green;
 	}
 	.cell.player-2.occupied-true {
+		background-color: coral;
+	}
+	.cell.player-1.occupied-false {
+		background-color: lightgreen;
+	}
+	.cell.player-2.occupied-false {
 		background-color: lightcoral;
 	}
 </style>
